@@ -27,6 +27,30 @@ export function sanitizeGroupTag(str) {
     .replace(/[^\p{L}\p{N}_\-]/gu, '');
 }
 
+/**
+ * Generate equivalent tag variants across Latin & Cyrillic layouts
+ * (e.g. Latin 'RRR' <-> Cyrillic 'РРР', 'ABC' <-> 'АВС')
+ */
+export function getHomoglyphVariants(tag) {
+  if (!tag) return [];
+  const clean = sanitizeGroupTag(tag);
+  const variants = new Set([clean]);
+
+  let toLatin = '';
+  for (const ch of clean) {
+    toLatin += CYR_TO_LAT[ch] || ch;
+  }
+  variants.add(toLatin);
+
+  let toCyrillic = '';
+  for (const ch of clean) {
+    toCyrillic += LAT_TO_CYR[ch] || ch;
+  }
+  variants.add(toCyrillic);
+
+  return Array.from(variants);
+}
+
 function initGroupFromStorage() {
   const urlParams = new URLSearchParams(window.location.search);
   const paramGroup = urlParams.get('group');

@@ -155,7 +155,7 @@ export async function fetchPhotosForGeohashes(geohashes) {
 }
 
 import { onSnapshot, getDoc } from 'firebase/firestore';
-import { sanitizeGroupTag } from './groupService.js';
+import { sanitizeGroupTag, getHomoglyphVariants } from './groupService.js';
 
 /**
  * Save or create Group metadata (Name + Tag) with uniqueness check
@@ -168,14 +168,17 @@ export async function saveGroupMetadata(groupData, isNewCreation = false) {
   if (db) {
     const groupRef = doc(db, 'groups', tag);
     
-    // If creating a brand new group, verify tag isn't already taken by another active group
+    // If creating a brand new group, verify tag isn't already taken across all keyboard variants
     if (isNewCreation) {
       try {
-        const existingSnap = await getDoc(groupRef);
-        if (existingSnap.exists()) {
-          const exData = existingSnap.data();
-          if (!exData.isDeleted && exData.ownerId && exData.ownerId !== groupData.ownerId) {
-            throw new Error(`Група з ключем #${tag} вже існує! Приєднайтеся до неї або оберіть інший ключ.`);
+        const variants = getHomoglyphVariants(tag);
+        for (const variant of variants) {
+          const existingSnap = await getDoc(doc(db, 'groups', variant));
+          if (existingSnap.exists()) {
+            const exData = existingSnap.data();
+            if (!exData.isDeleted && exData.status !== 'deleted' && exData.ownerId && exData.ownerId !== groupData.ownerId) {
+              throw new Error(`Група з ключем #${variant} вже існує! Приєднайтеся до неї або оберіть інший ключ.`);
+            }
           }
         }
       } catch (err) {
@@ -200,6 +203,7 @@ export async function saveGroupMetadata(groupData, isNewCreation = false) {
       await setDoc(groupRef, payload, { merge: true });
     } catch (err) {
       console.warn('Firebase save group warning:', err);
+      throw err;
     }
     return payload;
   }
@@ -211,7 +215,7 @@ export async function saveGroupMetadata(groupData, isNewCreation = false) {
 }
 
 /**
- * Fetch Group metadata by Tag
+ * Fetch Group metadata by Tag (Searches both exact tag and keyboard homoglyphs)
  */
 export async function fetchGroupMetadata(tag) {
   if (!tag) return null;
@@ -219,18 +223,20 @@ export async function fetchGroupMetadata(tag) {
   if (!cleanTag) return null;
 
   if (db) {
-    try {
-      const groupRef = doc(db, 'groups', cleanTag);
-      const snap = await getDoc(groupRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.isDeleted || data.status === 'deleted') {
-          return null; // Group was deleted
+    const variants = getHomoglyphVariants(cleanTag);
+    for (const variant of variants) {
+      try {
+        const groupRef = doc(db, 'groups', variant);
+        const snap = await getDoc(groupRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          if (!data.isDeleted && data.status !== 'deleted') {
+            return { ...data, tag: variant };
+          }
         }
-        return data;
+      } catch (err) {
+        console.warn('Error fetching group metadata variant:', err);
       }
-    } catch (err) {
-      console.warn('Error fetching group metadata:', err);
     }
   }
   return null;
