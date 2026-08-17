@@ -1,20 +1,15 @@
 /**
  * Main Application Bootstrap
- * GeoSnap Map — 100% Client-Side Interactive Photo Map for GitHub Pages & Firebase Spark
+ * GeoSnap — Simple & Beautiful Interactive Photo Map
  */
 import { initFirebase } from './services/firebase.js';
 import { initAuth } from './services/authService.js';
 import { initMap, locateUser, renderMapMarkers, getMapInstance } from './components/map.js';
 import { openUploadModal } from './components/uploadModal.js';
-import { openSettingsModal } from './components/settingsModal.js';
-import { openInfoModal } from './components/infoModal.js';
 import { openProfileModal, updateHeaderNickDisplay } from './components/profileModal.js';
 import { openFriendsModal, updateHeaderGroupBadge } from './components/friendsModal.js';
 import { loadSampleLocations } from './utils/mockData.js';
-import { showToast } from './utils/toast.js';
-import { isConfigured } from './utils/config.js';
 
-// Global app state & initialization
 document.addEventListener('DOMContentLoaded', () => {
   // 1. Initialize Firebase & Authentication
   const { auth, isMock } = initFirebase();
@@ -25,28 +20,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // 2. Initialize Leaflet Map
   const map = initMap('map');
 
-  // If in demo / unconfigured mode, preload sample locations
-  if (isMock || !isConfigured()) {
+  if (isMock) {
     loadSampleLocations();
     renderMapMarkers();
   }
 
   // 3. Bind UI Controls
   setupNavigationAndControls();
-
-  // 4. Welcome Toast
-  setTimeout(() => {
-    if (isMock) {
-      showToast('Додаток готовий (Демо-режим). Натисніть ⚙️ для підключення вашого Firebase', 'info', 4500);
-    } else {
-      showToast('Підключено до Firebase Spark Plan 🚀', 'success', 3000);
-    }
-  }, 600);
 });
 
-/**
- * Setup Event Listeners for Header, Floating controls and Bottom Bar
- */
 function setupNavigationAndControls() {
   const map = getMapInstance();
 
@@ -66,7 +48,7 @@ function setupNavigationAndControls() {
     btnZoomOut.onclick = () => map.zoomOut();
   }
 
-  // Central Upload FAB Button (+)
+  // Central Upload Button (+)
   const btnUpload = document.getElementById('btn-open-upload');
   if (btnUpload) {
     btnUpload.onclick = () => openUploadModal();
@@ -88,20 +70,6 @@ function setupNavigationAndControls() {
     btnProfile.onclick = () => openProfileModal();
   }
 
-  const btnSettings = document.getElementById('btn-settings');
-  if (btnSettings) {
-    btnSettings.onclick = () => openSettingsModal();
-  }
-
-  const btnDemo = document.getElementById('btn-demo-data');
-  if (btnDemo) {
-    btnDemo.onclick = () => {
-      loadSampleLocations();
-      renderMapMarkers();
-      showToast('Демо-мітки завантажено на карту! ✨', 'success');
-    };
-  }
-
   // Bottom Navigation
   const navExplore = document.getElementById('nav-btn-explore');
   if (navExplore && map) {
@@ -110,8 +78,8 @@ function setupNavigationAndControls() {
     };
   }
 
-  const navInfo = document.getElementById('nav-btn-info');
-  if (navInfo) {
-    navInfo.onclick = () => openInfoModal();
+  const navFriendsBottom = document.getElementById('nav-btn-friends-bottom');
+  if (navFriendsBottom) {
+    navFriendsBottom.onclick = () => openFriendsModal();
   }
 }

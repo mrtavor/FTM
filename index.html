@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>FTM Photo Map — Інтерактивна Гео-Фотокарта</title>
-    <meta name="description" content="Інтерактивна карта для додавання фотографій за GPS-координатами зі 100% клієнтською обробкою та оптимізацією для Firebase." />
+    <title>GeoSnap — Карта фотографій та моментів</title>
+    <meta name="description" content="Інтерактивна карта для додавання та перегляду фотографій з друзями." />
     <meta name="theme-color" content="#3D405B" />
 
     <!-- Google Fonts: Plus Jakarta Sans -->
@@ -29,12 +29,12 @@
         <div class="logo-group">
           <div class="logo-icon">📍</div>
           <div class="logo-text">
-            <span class="logo-title">GeoSnap Map</span>
-            <span class="logo-subtitle">100% Client-Side • Spark Optimized</span>
+            <span class="logo-title">GeoSnap</span>
+            <span class="logo-subtitle">Карта спільних моментів</span>
           </div>
         </div>
         <div class="header-actions">
-          <button id="header-group-badge" class="btn-icon-pill" style="display: none; background: #E8F0FE; border-color: #D2E3FC; color: #1A73E8;" title="Активна група друзів">
+          <button id="header-group-badge" class="btn-icon-pill" style="display: none; background: #E8F0FE; border-color: #D2E3FC; color: #1A73E8;" title="Активна група">
             <span class="icon">👥</span>
             <span class="btn-text">Група</span>
           </button>
@@ -42,12 +42,9 @@
             <span class="icon">👥</span>
             <span class="btn-text">Друзі</span>
           </button>
-          <button id="btn-profile" class="btn-icon-pill" title="Мій профіль та акаунт" aria-label="Профіль">
+          <button id="btn-profile" class="btn-icon-pill" title="Мій профіль" aria-label="Профіль">
             <span class="icon">👤</span>
             <span class="btn-text" id="header-user-nick">Мандрівник</span>
-          </button>
-          <button id="btn-settings" class="btn-icon" title="Налаштування Firebase" aria-label="Налаштування">
-            ⚙️
           </button>
         </div>
       </header>
@@ -56,18 +53,18 @@
       <main class="map-wrapper">
         <div id="map" class="map-view"></div>
         
-        <!-- Crosshair Picker Overlay (Activated during manual pin mode) -->
+        <!-- Crosshair Picker Overlay -->
         <div id="crosshair-picker" class="crosshair-picker hidden">
           <div class="crosshair-icon">📍</div>
-          <div class="crosshair-tooltip">Перетягніть карту, щоб встановити точку</div>
+          <div class="crosshair-tooltip">Перетягніть карту, щоб вибрати місце</div>
           <button id="btn-confirm-location" class="btn-primary btn-picker-confirm">
-            ✓ Підтвердити координати
+            ✓ Підтвердити це місце
           </button>
         </div>
 
-        <!-- Floating Quick Controls -->
+        <!-- Floating Controls -->
         <div class="floating-controls">
-          <button id="btn-locate-me" class="btn-fab" title="Моя геолокація" aria-label="Моє місцезнаходження">
+          <button id="btn-locate-me" class="btn-fab" title="Моє місцезнаходження" aria-label="Моє місцезнаходження">
             🧭
           </button>
           <button id="btn-zoom-in" class="btn-fab" title="Наблизити" aria-label="Наблизити">
@@ -86,23 +83,23 @@
           <span class="nav-label">Карта</span>
         </button>
 
-        <!-- Central Elevated Upload Button -->
+        <!-- Central Upload Button -->
         <div class="upload-btn-container">
           <button id="btn-open-upload" class="btn-upload-fab" aria-label="Додати нове фото">
             <span class="plus-sign">+</span>
           </button>
         </div>
 
-        <button id="nav-btn-info" class="nav-item" aria-label="Про проект">
-          <span class="nav-icon">ℹ️</span>
-          <span class="nav-label">Інфо</span>
+        <button id="nav-btn-friends-bottom" class="nav-item" aria-label="Мої друзі">
+          <span class="nav-icon">👥</span>
+          <span class="nav-label">Друзі</span>
         </button>
       </nav>
 
       <!-- Toast Notification Container -->
       <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-      <!-- Modals are mounted here dynamically -->
+      <!-- Modals Container -->
       <div id="modal-container"></div>
     </div>
 
