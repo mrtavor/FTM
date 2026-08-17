@@ -274,41 +274,114 @@ export function subscribeToGroupMetadata(groupTag, onUpdate) {
 }
 
 /**
- * Fetch list of active members in a group with photo counts
- * @param {string} groupCode 
- * @param {string} ownerId
- * @returns {Promise<Array<{name: string, count: number, userId: string, isAdmin: boolean}>>}
+ * Register user in group members list
  */
-export async function fetchGroupMembers(groupCode, ownerId = '') {
-  if (!db || !groupCode) return [];
-  try {
-    const cleanTag = sanitizeGroupTag(groupCode);
-    const q = query(collection(db, 'photos'), where('groupCode', '==', cleanTag), limit(100));
-    const snapshot = await getDocs(q);
-    const membersMap = new Map();
+export async function registerGroupMember(groupCode, memberObj) {
+  if (!db || !groupCode || !memberObj) return;
+  const cleanTag = sanitizeGroupTag(groupCode);
+  if (!cleanTag) return;
 
+  try {
+    const groupRef = doc(db, 'groups', cleanTag);
+    const snap = await getDoc(groupRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      const members = Array.isArray(data.members) ? [...data.members] : [];
+      const exists = members.some(m => m.name === memberObj.name || (memberObj.uid && m.uid === memberObj.uid));
+      if (!exists) {
+        members.push({
+          uid: memberObj.uid || '',
+          name: memberObj.name || 'Учасник',
+          joinedAt: new Date().toISOString()
+        });
+        await setDoc(groupRef, { members }, { merge: true });
+      }
+    }
+  } catch (err) {
+    console.warn('Register group member error:', err);
+  }
+}
+
+/**
+ * Fetch list of active members in a group with photo counts
+ * Guaranteed to show current user and registered members even before first photo
+ */
+export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName = '', currentUserId = '') {
+  const cleanTag = sanitizeGroupTag(groupCode);
+  const membersMap = new Map();
+
+  // 1. Always ensure Current User is in the list
+  if (currentUserName) {
+    membersMap.set(currentUserName, {
+      name: currentUserName,
+      count: 0,
+      userId: currentUserId,
+      isAdmin: Boolean(!ownerId || (currentUserId && ownerId === currentUserId))
+    });
+  }
+
+  if (!db || !cleanTag) {
+    return Array.from(membersMap.values());
+  }
+
+  // 2. Fetch Group Doc to get registered members & owner
+  try {
+    const groupRef = doc(db, 'groups', cleanTag);
+    const groupSnap = await getDoc(groupRef);
+    if (groupSnap.exists()) {
+      const groupData = groupSnap.data();
+      const realOwnerId = groupData.ownerId || ownerId;
+      const registeredMembers = Array.isArray(groupData.members) ? groupData.members : [];
+
+      registeredMembers.forEach(m => {
+        const isAdm = Boolean(realOwnerId && m.uid && m.uid === realOwnerId);
+        const existing = membersMap.get(m.name);
+        if (existing) {
+          if (m.uid) existing.userId = m.uid;
+          existing.isAdmin = isAdm || existing.isAdmin;
+        } else {
+          membersMap.set(m.name, {
+            name: m.name,
+            count: 0,
+            userId: m.uid || '',
+            isAdmin: isAdm
+          });
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('Error reading group doc members:', e);
+  }
+
+  // 3. Count photos by member
+  try {
+    const q = query(collection(db, 'photos'), where('groupCode', '==', cleanTag), limit(150));
+    const snapshot = await getDocs(q);
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
       const name = data.authorName || 'Учасник';
       const userId = data.userId || '';
-      const current = membersMap.get(name) || {
-        name,
-        count: 0,
-        userId,
-        isAdmin: Boolean(ownerId && userId === ownerId)
-      };
-      current.count += 1;
-      if (ownerId && userId === ownerId) {
-        current.isAdmin = true;
-      }
-      membersMap.set(name, current);
-    });
+      const isAdm = Boolean(ownerId && userId === ownerId);
 
-    return Array.from(membersMap.values());
+      const existing = membersMap.get(name);
+      if (existing) {
+        existing.count += 1;
+        if (userId) existing.userId = userId;
+        if (isAdm) existing.isAdmin = true;
+      } else {
+        membersMap.set(name, {
+          name,
+          count: 1,
+          userId,
+          isAdmin: isAdm
+        });
+      }
+    });
   } catch (err) {
-    console.warn('Error fetching group members:', err);
-    return [];
+    console.warn('Error counting group member photos:', err);
   }
+
+  return Array.from(membersMap.values());
 }
 
 /**

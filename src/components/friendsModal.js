@@ -22,7 +22,8 @@ import {
   saveGroupMetadata,
   fetchGroupMetadata,
   deleteGroup,
-  kickMemberFromGroup
+  kickMemberFromGroup,
+  registerGroupMember
 } from '../services/firebase.js';
 import { renderMapMarkers } from './map.js';
 import { showToast } from '../utils/toast.js';
@@ -62,11 +63,16 @@ export async function openFriendsModal() {
     return;
   }
 
+  // Register current user in the group registry
+  if (activeGroup && currentUserName) {
+    registerGroupMember(activeGroup, { uid: currentUserId, name: currentUserName });
+  }
+
   const isAdmin = Boolean(activeGroup && (!groupOwnerId || groupOwnerId === currentUserId));
 
   let members = [];
   if (activeGroup) {
-    members = await fetchGroupMembers(activeGroup, groupOwnerId || currentUserId);
+    members = await fetchGroupMembers(activeGroup, groupOwnerId || currentUserId, currentUserName, currentUserId);
   }
 
   container.innerHTML = `
