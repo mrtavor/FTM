@@ -67,16 +67,16 @@
    2. EMOJI PIN MARKERS (Medium Zoom: 11 <= Zoom <= 14)
    ========================================================================== */
 .custom-emoji-marker {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  cursor: pointer;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer !important;
+  pointer-events: auto !important;
 }
 
-.custom-emoji-marker:hover {
+.custom-emoji-marker .emoji-pin-bubble {
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.custom-emoji-marker:hover .emoji-pin-bubble {
   transform: translateY(-4px) scale(1.15);
-  z-index: 1000 !important;
 }
 
 .emoji-pin-bubble {
@@ -91,6 +91,7 @@
   box-shadow: var(--shadow-md);
   border: 2px solid var(--accent-primary);
   position: relative;
+  pointer-events: auto;
 }
 
 .emoji-pin-bubble::after {
@@ -110,16 +111,16 @@
    3. THUMBNAIL PIN MARKERS (Zoom In: Zoom >= 15)
    ========================================================================== */
 .custom-thumb-marker {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  cursor: pointer;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer !important;
+  pointer-events: auto !important;
 }
 
-.custom-thumb-marker:hover {
-  transform: translateY(-6px) scale(1.12);
-  z-index: 1000 !important;
+.custom-thumb-marker .thumb-pin-container {
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.custom-thumb-marker:hover .thumb-pin-container {
+  transform: translateY(-5px) scale(1.1);
 }
 
 .thumb-pin-container {
@@ -132,6 +133,7 @@
   border: 2px solid #FFFFFF;
   position: relative;
   overflow: visible;
+  pointer-events: auto;
 }
 
 .thumb-pin-image {

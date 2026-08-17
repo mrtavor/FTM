@@ -38,8 +38,7 @@ export function initMap(containerId = 'map') {
     zoom: country.zoom,
     minZoom: 3,
     maxZoom: 19,
-    zoomControl: false,
-    preferCanvas: true
+    zoomControl: false
   });
 
   // Fast Eye-Care CartoDB Voyager TileLayer with pre-buffering
@@ -273,16 +272,32 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
   const marker = L.marker([photo.lat, photo.lng], {
     icon: customIcon,
     riseOnHover: true,
-    keyboard: true
+    keyboard: true,
+    interactive: true,
+    bubblingMouseEvents: false
   });
 
   marker.photoData = photo;
 
+  // 1. Leaflet Marker Click Event
   marker.on('click', (e) => {
     if (e && e.originalEvent) {
       L.DomEvent.stopPropagation(e);
+      L.DomEvent.preventDefault(e);
     }
     openPhotoDetailModal(photo);
+  });
+
+  // 2. Direct Native DOM Click & Mouseup Event for Desktop Mice
+  marker.on('add', () => {
+    const el = marker.getElement();
+    if (el) {
+      el.style.cursor = 'pointer';
+      el.onclick = (e) => {
+        e.stopPropagation();
+        openPhotoDetailModal(photo);
+      };
+    }
   });
 
   return marker;
