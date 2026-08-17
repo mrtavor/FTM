@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Firebase Service Layer (Modular SDK v10)
  * Auth, Cloud Firestore & Cloud Storage
  */
@@ -95,10 +95,10 @@ export async function savePhotoDocument(photoData) {
     lng: photoData.lng,
     geohash: photoData.geohash,
     description: photoData.description || '',
-    emoji: photoData.emoji || '📸',
+    emoji: photoData.emoji || 'рџ“ё',
     mainUrl: photoData.mainUrl,
     thumbUrl: photoData.thumbUrl,
-    authorName: photoData.authorName || 'Мандрівник',
+    authorName: photoData.authorName || 'РњР°РЅРґСЂС–РІРЅРёРє',
     groupCode: photoData.groupCode || null,
     userId: photoData.userId,
     createdAt: serverTimestamp()
@@ -182,11 +182,11 @@ export async function saveGroupMetadata(groupData, isNewCreation = false) {
         if (existingSnap.exists()) {
           const exData = existingSnap.data();
           if (!exData.isDeleted && exData.status !== 'deleted' && exData.ownerId && exData.ownerId !== groupData.ownerId) {
-            throw new Error(`Група з ключем #${tag} вже існує! Приєднайтеся до неї або оберіть інший ключ.`);
+            throw new Error(`Р“СЂСѓРїР° Р· РєР»СЋС‡РµРј #${tag} РІР¶Рµ С–СЃРЅСѓС”! РџСЂРёС”РґРЅР°Р№С‚РµСЃСЏ РґРѕ РЅРµС— Р°Р±Рѕ РѕР±РµСЂС–С‚СЊ С–РЅС€РёР№ РєР»СЋС‡.`);
           }
         }
       } catch (err) {
-        if (err.message && err.message.includes('вже існує')) throw err;
+        if (err.message && err.message.includes('РІР¶Рµ С–СЃРЅСѓС”')) throw err;
       }
     }
 
@@ -194,10 +194,10 @@ export async function saveGroupMetadata(groupData, isNewCreation = false) {
       tag,
       name: groupData.name?.trim() || tag,
       ownerId: groupData.ownerId || '',
-      adminName: groupData.adminName || 'Адміністратор',
+      adminName: groupData.adminName || 'РђРґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ',
       members: [{
         uid: groupData.ownerId || '',
-        name: groupData.adminName || 'Адміністратор',
+        name: groupData.adminName || 'РђРґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ',
         joinedAt: new Date().toISOString()
       }],
       isDeleted: false,
@@ -321,7 +321,7 @@ export async function registerGroupMember(groupCode, memberObj) {
     if (snap.exists()) {
       const data = snap.data();
       const members = Array.isArray(data.members) ? [...data.members] : [];
-      const newName = memberObj.name || 'Учасник';
+      const newName = memberObj.name || 'РЈС‡Р°СЃРЅРёРє';
       const uid = memberObj.uid || '';
 
       // Match by UID first, or name if no UID
@@ -395,7 +395,7 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
       // Group creator / admin
       if (realOwnerId || groupData.adminName) {
         const isAdminCurrentUser = Boolean(realOwnerId && currentUserId && realOwnerId === currentUserId);
-        const adminDisplayName = isAdminCurrentUser ? currentUserName : (groupData.adminName || 'Адміністратор');
+        const adminDisplayName = isAdminCurrentUser ? currentUserName : (groupData.adminName || 'РђРґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ');
         const adminKey = getMemberKey(realOwnerId, adminDisplayName);
 
         membersMap.set(adminKey, {
@@ -411,7 +411,7 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
       registeredMembers.forEach(m => {
         if (!m) return;
         const isCurrentUser = Boolean(currentUserId && m.uid && m.uid === currentUserId);
-        const displayName = isCurrentUser ? (currentUserName || m.name) : (m.name || 'Учасник');
+        const displayName = isCurrentUser ? (currentUserName || m.name) : (m.name || 'РЈС‡Р°СЃРЅРёРє');
         const isAdm = Boolean(realOwnerId && m.uid && m.uid === realOwnerId);
         const key = getMemberKey(m.uid, displayName);
 
@@ -445,7 +445,7 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
       if (isAdm) existing.isAdmin = true;
     } else {
       membersMap.set(key, {
-        name: currentUserName || 'Мандрівник',
+        name: currentUserName || 'РњР°РЅРґСЂС–РІРЅРёРє',
         count: 0,
         userId: currentUserId || '',
         isAdmin: isAdm
@@ -460,7 +460,7 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
       const photoUid = data.userId || '';
-      const photoAuthor = data.authorName || 'Учасник';
+      const photoAuthor = data.authorName || 'РЈС‡Р°СЃРЅРёРє';
       const isAdm = Boolean(realOwnerId && photoUid && photoUid === realOwnerId);
 
       // Match by UID first, then by name
@@ -608,26 +608,39 @@ export async function deletePhoto(photo) {
   return true;
 }
 
-// ──────────────────────────────────────────────
-// Likes (photos/{photoId}/likes/{userId})
-// ──────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Likes  --> top-level collection: photo_likes / doc id: {photoId}_{userId}
+// Top-level avoids subcollection Firestore security-rule gaps.
+// ---------------------------------------------------------------------------
+
+// In-memory fallback (demo / offline mode)
+const _localLikes = new Map();
+const _localComments = new Map();
 
 /**
- * Toggle like on a photo. One like per user, keyed by userId.
+ * Toggle like on a photo (one per user, atomic toggle).
  * @returns {Promise<{liked: boolean}>}
  */
 export async function toggleLike(photoId, userId, userName) {
   if (!photoId || !userId) return { liked: false };
-  if (!db) return { liked: false };
 
-  const likeRef = doc(db, 'photos', photoId, 'likes', userId);
+  if (!db) {
+    const set = _localLikes.get(photoId) || new Set();
+    const wasLiked = set.has(userId);
+    wasLiked ? set.delete(userId) : set.add(userId);
+    _localLikes.set(photoId, set);
+    return { liked: !wasLiked };
+  }
+
+  const likeId = `${photoId}_${userId}`;
+  const likeRef = doc(db, 'photo_likes', likeId);
   try {
     const snap = await getDoc(likeRef);
     if (snap.exists()) {
       await deleteDoc(likeRef);
       return { liked: false };
     } else {
-      await setDoc(likeRef, { userId, userName: userName || 'Мандрівник', createdAt: serverTimestamp() });
+      await setDoc(likeRef, { photoId, userId, userName: userName || 'Мандрівник', createdAt: serverTimestamp() });
       return { liked: true };
     }
   } catch (err) {
@@ -641,22 +654,28 @@ export async function toggleLike(photoId, userId, userName) {
  * @returns {Function} Unsubscribe
  */
 export function subscribeToLikes(photoId, onUpdate) {
-  if (!db || !photoId) { onUpdate([]); return () => {}; }
-  const likesCol = collection(db, 'photos', photoId, 'likes');
+  if (!db || !photoId) {
+    const localSet = _localLikes.get(photoId) || new Set();
+    onUpdate(Array.from(localSet).map(uid => ({ userId: uid, userName: '' })));
+    return () => {};
+  }
+
+  const q = query(collection(db, 'photo_likes'), where('photoId', '==', photoId), limit(500));
   return onSnapshot(
-    likesCol,
+    q,
     (snap) => {
       const likes = [];
       snap.forEach((d) => likes.push({ id: d.id, ...d.data() }));
       onUpdate(likes);
     },
-    () => onUpdate([])
+    (err) => { console.warn('subscribeToLikes error:', err); onUpdate([]); }
   );
 }
 
-// ──────────────────────────────────────────────
-// Comments (photos/{photoId}/comments/{autoId})
-// ──────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Comments --> top-level collection: photo_comments / doc id: cmt_{timestamp}
+// No Firestore orderBy -> sorted client-side -> no composite index required.
+// ---------------------------------------------------------------------------
 
 /**
  * Add a comment to a photo.
@@ -665,58 +684,74 @@ export function subscribeToLikes(photoId, onUpdate) {
 export async function addComment(photoId, commentData) {
   const text = commentData?.text?.trim();
   if (!photoId || !text) return null;
-  if (!db) return null;
+
+  const commentId = `cmt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const commentObj = {
+    id: commentId,
+    photoId,
+    userId: commentData.userId || '',
+    userName: commentData.userName || 'Мандрівник',
+    text,
+    createdAt: new Date().toISOString()
+  };
+
+  if (!db) {
+    const arr = _localComments.get(photoId) || [];
+    arr.push(commentObj);
+    _localComments.set(photoId, arr);
+    return commentId;
+  }
 
   try {
-    const commentsCol = collection(db, 'photos', photoId, 'comments');
-    const commentRef = doc(commentsCol);
-    await setDoc(commentRef, {
-      id: commentRef.id,
-      userId: commentData.userId || '',
-      userName: commentData.userName || 'Мандрівник',
-      text,
-      createdAt: serverTimestamp()
-    });
-    return commentRef.id;
+    await setDoc(doc(db, 'photo_comments', commentId), commentObj);
+    return commentId;
   } catch (err) {
-    console.warn('addComment error:', err);
+    console.error('addComment error:', err);
     return null;
   }
 }
 
 /**
- * Delete a comment from a photo.
+ * Delete a comment.
  */
 export async function deleteComment(photoId, commentId) {
-  if (!db || !photoId || !commentId) return;
+  if (!commentId) return;
+
+  if (!db) {
+    const arr = _localComments.get(photoId) || [];
+    _localComments.set(photoId, arr.filter(c => c.id !== commentId));
+    return;
+  }
+
   try {
-    await deleteDoc(doc(db, 'photos', photoId, 'comments', commentId));
+    await deleteDoc(doc(db, 'photo_comments', commentId));
   } catch (err) {
     console.warn('deleteComment error:', err);
   }
 }
 
 /**
- * Real-time listener for comments on a photo (ordered by time).
+ * Real-time listener for comments on a photo.
+ * Sorted client-side (no Firestore orderBy = no composite index required).
  * @returns {Function} Unsubscribe
  */
 export function subscribeToComments(photoId, onUpdate) {
-  if (!db || !photoId) { onUpdate([]); return () => {}; }
-  const q = query(
-    collection(db, 'photos', photoId, 'comments'),
-    orderBy('createdAt', 'asc'),
-    limit(100)
-  );
+  if (!db || !photoId) {
+    onUpdate((_localComments.get(photoId) || []).slice());
+    return () => {};
+  }
+
+  const q = query(collection(db, 'photo_comments'), where('photoId', '==', photoId), limit(100));
   return onSnapshot(
     q,
     (snap) => {
       const comments = [];
       snap.forEach((d) => comments.push({ id: d.id, ...d.data() }));
+      comments.sort((a, b) => (a.createdAt || '') < (b.createdAt || '') ? -1 : 1);
       onUpdate(comments);
     },
-    () => onUpdate([])
+    (err) => { console.warn('subscribeToComments error:', err); onUpdate([]); }
   );
 }
 
 export { auth, db, storage };
-
