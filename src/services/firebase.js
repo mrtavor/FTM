@@ -608,4 +608,115 @@ export async function deletePhoto(photo) {
   return true;
 }
 
+// ──────────────────────────────────────────────
+// Likes (photos/{photoId}/likes/{userId})
+// ──────────────────────────────────────────────
+
+/**
+ * Toggle like on a photo. One like per user, keyed by userId.
+ * @returns {Promise<{liked: boolean}>}
+ */
+export async function toggleLike(photoId, userId, userName) {
+  if (!photoId || !userId) return { liked: false };
+  if (!db) return { liked: false };
+
+  const likeRef = doc(db, 'photos', photoId, 'likes', userId);
+  try {
+    const snap = await getDoc(likeRef);
+    if (snap.exists()) {
+      await deleteDoc(likeRef);
+      return { liked: false };
+    } else {
+      await setDoc(likeRef, { userId, userName: userName || 'Мандрівник', createdAt: serverTimestamp() });
+      return { liked: true };
+    }
+  } catch (err) {
+    console.warn('toggleLike error:', err);
+    return { liked: false };
+  }
+}
+
+/**
+ * Real-time listener for likes on a photo.
+ * @returns {Function} Unsubscribe
+ */
+export function subscribeToLikes(photoId, onUpdate) {
+  if (!db || !photoId) { onUpdate([]); return () => {}; }
+  const likesCol = collection(db, 'photos', photoId, 'likes');
+  return onSnapshot(
+    likesCol,
+    (snap) => {
+      const likes = [];
+      snap.forEach((d) => likes.push({ id: d.id, ...d.data() }));
+      onUpdate(likes);
+    },
+    () => onUpdate([])
+  );
+}
+
+// ──────────────────────────────────────────────
+// Comments (photos/{photoId}/comments/{autoId})
+// ──────────────────────────────────────────────
+
+/**
+ * Add a comment to a photo.
+ * @returns {Promise<string|null>} Comment ID or null
+ */
+export async function addComment(photoId, commentData) {
+  const text = commentData?.text?.trim();
+  if (!photoId || !text) return null;
+  if (!db) return null;
+
+  try {
+    const commentsCol = collection(db, 'photos', photoId, 'comments');
+    const commentRef = doc(commentsCol);
+    await setDoc(commentRef, {
+      id: commentRef.id,
+      userId: commentData.userId || '',
+      userName: commentData.userName || 'Мандрівник',
+      text,
+      createdAt: serverTimestamp()
+    });
+    return commentRef.id;
+  } catch (err) {
+    console.warn('addComment error:', err);
+    return null;
+  }
+}
+
+/**
+ * Delete a comment from a photo.
+ */
+export async function deleteComment(photoId, commentId) {
+  if (!db || !photoId || !commentId) return;
+  try {
+    await deleteDoc(doc(db, 'photos', photoId, 'comments', commentId));
+  } catch (err) {
+    console.warn('deleteComment error:', err);
+  }
+}
+
+/**
+ * Real-time listener for comments on a photo (ordered by time).
+ * @returns {Function} Unsubscribe
+ */
+export function subscribeToComments(photoId, onUpdate) {
+  if (!db || !photoId) { onUpdate([]); return () => {}; }
+  const q = query(
+    collection(db, 'photos', photoId, 'comments'),
+    orderBy('createdAt', 'asc'),
+    limit(100)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const comments = [];
+      snap.forEach((d) => comments.push({ id: d.id, ...d.data() }));
+      onUpdate(comments);
+    },
+    () => onUpdate([])
+  );
+}
+
 export { auth, db, storage };
+
