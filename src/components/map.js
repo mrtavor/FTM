@@ -8,8 +8,10 @@
 import L from 'leaflet';
 import 'leaflet.markercluster';
 import { geoService } from '../services/geoService.js';
-import { fetchPhotosForGeohashes, subscribeToGroupUpdates } from '../services/firebase.js';
-import { getActiveGroupCode, getFilterMode, onGroupChange, notifyNewGroupPhoto } from '../services/groupService.js';
+import { fetchPhotosForGeohashes, subscribeToGroupUpdates, subscribeToGroupMetadata } from '../services/firebase.js';
+import { getActiveGroupCode, getFilterMode, onGroupChange, notifyNewGroupPhoto, clearActiveGroup, setActiveGroup } from '../services/groupService.js';
+import { getCurrentDisplayName } from '../services/authService.js';
+import { updateHeaderGroupBadge } from './friendsModal.js';
 import { openPhotoDetailModal } from './photoDetailModal.js';
 import { showToast } from '../utils/toast.js';
 
@@ -20,6 +22,7 @@ let isPickerActive = false;
 let onLocationSelectedCallback = null;
 let debounceTimer = null;
 let groupUnsubscribe = null;
+let metaUnsubscribe = null;
 
 const DEFAULT_CENTER = [48.3794, 31.1656];
 const DEFAULT_ZOOM = 6;
@@ -80,19 +83,52 @@ export function initMap(containerId = 'map') {
 
   mapInstance.on('moveend zoomend', handleMapViewportChange);
 
-  // Setup real-time listener for current group
+  // Setup real-time listener for current group and metadata
   onGroupChange(({ activeGroupCode }) => {
     if (groupUnsubscribe) {
       groupUnsubscribe();
       groupUnsubscribe = null;
     }
+    if (metaUnsubscribe) {
+      metaUnsubscribe();
+      metaUnsubscribe = null;
+    }
 
     if (activeGroupCode) {
-      groupUnsubscribe = subscribeToGroupUpdates(activeGroupCode, (newPhoto) => {
-        notifyNewGroupPhoto(newPhoto, (lat, lng) => {
-          flyToCoords(lat, lng, 15);
-        });
-        renderMapMarkers();
+      // 1. Photos real-time sync (instant pin add/remove)
+      groupUnsubscribe = subscribeToGroupUpdates(
+        activeGroupCode,
+        (newPhoto) => {
+          notifyNewGroupPhoto(newPhoto, (lat, lng) => {
+            flyToCoords(lat, lng, 15);
+          });
+          renderMapMarkers();
+        },
+        (removedPhotoId) => {
+          renderMapMarkers();
+        }
+      );
+
+      // 2. Group metadata real-time sync (name change, ban, deletion)
+      metaUnsubscribe = subscribeToGroupMetadata(activeGroupCode, (meta) => {
+        const currentUserName = getCurrentDisplayName();
+        if (!meta.exists) {
+          clearActiveGroup();
+          updateHeaderGroupBadge();
+          showToast('Цю групу було видалено адміністратором', 'info');
+          renderMapMarkers();
+        } else {
+          const banned = Array.isArray(meta.bannedMembers) ? meta.bannedMembers : [];
+          if (banned.includes(currentUserName)) {
+            clearActiveGroup();
+            updateHeaderGroupBadge();
+            showToast('Вас було вилучено з цієї групи', 'error');
+            renderMapMarkers();
+          } else if (meta.name) {
+            setActiveGroup(activeGroupCode, meta.name);
+            updateHeaderGroupBadge();
+          }
+        }
       });
     }
     renderMapMarkers();

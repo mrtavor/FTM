@@ -249,6 +249,31 @@ export async function kickMemberFromGroup(groupTag, memberName) {
 }
 
 /**
+ * Real-time listener for Group Metadata (Name, Tag, Admin changes, Deletion, Ban)
+ * Syncs instantaneously across all devices
+ */
+export function subscribeToGroupMetadata(groupTag, onUpdate) {
+  if (!db || !groupTag) return () => {};
+  const cleanTag = sanitizeGroupTag(groupTag);
+  if (!cleanTag) return () => {};
+
+  const groupRef = doc(db, 'groups', cleanTag);
+  const unsubscribe = onSnapshot(groupRef, (snap) => {
+    if (typeof onUpdate === 'function') {
+      if (snap.exists()) {
+        onUpdate({ exists: true, ...snap.data() });
+      } else {
+        onUpdate({ exists: false, tag: cleanTag });
+      }
+    }
+  }, (err) => {
+    console.warn('Group metadata sync error:', err);
+  });
+
+  return unsubscribe;
+}
+
+/**
  * Fetch list of active members in a group with photo counts
  * @param {string} groupCode 
  * @param {string} ownerId
@@ -257,7 +282,8 @@ export async function kickMemberFromGroup(groupTag, memberName) {
 export async function fetchGroupMembers(groupCode, ownerId = '') {
   if (!db || !groupCode) return [];
   try {
-    const q = query(collection(db, 'photos'), where('groupCode', '==', groupCode), limit(100));
+    const cleanTag = sanitizeGroupTag(groupCode);
+    const q = query(collection(db, 'photos'), where('groupCode', '==', cleanTag), limit(100));
     const snapshot = await getDocs(q);
     const membersMap = new Map();
 
@@ -286,19 +312,21 @@ export async function fetchGroupMembers(groupCode, ownerId = '') {
 }
 
 /**
- * Real-time listener for new group photos (triggers live notifications)
+ * Real-time listener for group photos (triggers live notifications & map updates)
  * @param {string} groupCode 
  * @param {Function} onNewPhoto 
+ * @param {Function} onPhotoRemoved
  * @returns {Function} Unsubscribe function
  */
-export function subscribeToGroupUpdates(groupCode, onNewPhoto) {
+export function subscribeToGroupUpdates(groupCode, onNewPhoto, onPhotoRemoved) {
   if (!db || !groupCode) return () => {};
+  const cleanTag = sanitizeGroupTag(groupCode);
 
   let isFirstLoad = true;
   const q = query(
     collection(db, 'photos'),
-    where('groupCode', '==', groupCode),
-    limit(50)
+    where('groupCode', '==', cleanTag),
+    limit(100)
   );
 
   const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -316,6 +344,11 @@ export function subscribeToGroupUpdates(groupCode, onNewPhoto) {
         geoService.addPhotosToCache([photo]);
         if (typeof onNewPhoto === 'function') {
           onNewPhoto(photo);
+        }
+      } else if (change.type === 'removed') {
+        geoService.cache.delete(change.doc.id);
+        if (typeof onPhotoRemoved === 'function') {
+          onPhotoRemoved(change.doc.id);
         }
       }
     });
