@@ -115,20 +115,13 @@
 
 .pv-image-wrap {
   width: 100%;
-  background: #000000;
   border-radius: var(--radius-md, 12px);
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  max-height: 380px;
 }
 
 .pv-image {
   width: 100%;
   height: auto;
-  max-height: 380px;
-  object-fit: contain;
   display: block;
 }
 
