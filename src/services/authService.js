@@ -163,6 +163,15 @@ function notifyListeners(user) {
   });
 }
 
+export async function loginWithGoogle() {
+  if (!auth) throw new Error('Firebase Auth не ініціалізовано');
+  const provider = new GoogleAuthProvider();
+  const cred = await signInWithPopup(auth, provider);
+  currentUser = cred.user;
+  notifyListeners(currentUser);
+  return cred.user;
+}
+
 export async function logoutUser() {
   if (auth) {
     await signOut(auth);
