@@ -26,6 +26,7 @@ import {
   registerGroupMember
 } from '../services/firebase.js';
 import { renderMapMarkers } from './map.js';
+import { openGalleryModal } from './galleryModal.js';
 import { showToast } from '../utils/toast.js';
 
 let isEditingSettings = false;
@@ -213,6 +214,14 @@ export async function openFriendsModal() {
                   Ще немає доданих фото. Опублікуйте перше!
                 </div>
               `}
+
+              <!-- Button to browse all group photos -->
+              <div style="margin-top: 10px;">
+                <button type="button" id="btn-view-group-photos" class="btn-secondary" style="width: 100%; padding: 10px; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                  <span>🖼️</span>
+                  <span>Галерея всіх фото цієї групи</span>
+                </button>
+              </div>
             </div>
 
             <!-- Map Filter -->
@@ -329,6 +338,14 @@ function attachFriendsEvents(isAdmin, groupOwnerId) {
   backdrop.onclick = (e) => {
     if (e.target === backdrop) close();
   };
+
+  const btnViewGroupPhotos = document.getElementById('btn-view-group-photos');
+  if (btnViewGroupPhotos) {
+    btnViewGroupPhotos.onclick = () => {
+      close();
+      openGalleryModal('group');
+    };
+  }
 
   if (btnGoogleAuth) {
     btnGoogleAuth.onclick = async () => {
