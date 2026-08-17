@@ -480,6 +480,12 @@ export function subscribeToGroupUpdates(groupCode, onNewPhoto, onPhotoRemoved) {
         if (typeof onNewPhoto === 'function') {
           onNewPhoto(photo);
         }
+      } else if (change.type === 'modified') {
+        const photo = { id: change.doc.id, ...change.doc.data() };
+        geoService.addPhotosToCache([photo]);
+        if (typeof onNewPhoto === 'function') {
+          onNewPhoto(photo);
+        }
       } else if (change.type === 'removed') {
         geoService.cache.delete(change.doc.id);
         if (typeof onPhotoRemoved === 'function') {
