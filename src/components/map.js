@@ -61,17 +61,15 @@ export function initMap(containerId = 'map') {
     mapContainer.addEventListener('pointerup', (e) => {
       const dx = Math.abs(e.clientX - downX);
       const dy = Math.abs(e.clientY - downY);
-      // Only treat as click if pointer barely moved (< 8px) — not a drag
-      if (dx < 8 && dy < 8 && downTarget) {
-        const pin = e.target.closest('[data-photo-id]') || downTarget;
-        if (pin) {
-          const photoId = pin.getAttribute('data-photo-id');
-          const photo = geoService.cache.get(photoId);
-          if (photo) {
-            e.preventDefault();
-            e.stopPropagation();
-            showPhotoViewer(photo, () => renderMapMarkers());
-          }
+      // Only open if: barely moved (< 10px) AND we had a pin on pointerdown
+      if (dx < 10 && dy < 10 && downTarget) {
+        const photoId = downTarget.getAttribute('data-photo-id');
+        const photo = geoService.cache.get(photoId);
+        if (photo) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Small delay to let Leaflet finish its own event processing
+          setTimeout(() => showPhotoViewer(photo, () => renderMapMarkers()), 0);
         }
       }
       downTarget = null;
