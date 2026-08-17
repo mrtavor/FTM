@@ -158,30 +158,56 @@ import { onSnapshot, getDoc } from 'firebase/firestore';
 import { sanitizeGroupTag } from './groupService.js';
 
 /**
- * Save or create Group metadata (Name + Tag)
+ * Save or create Group metadata (Name + Tag) with uniqueness check
  */
-export async function saveGroupMetadata(groupData) {
+export async function saveGroupMetadata(groupData, isNewCreation = false) {
   if (!groupData.tag) return null;
   const tag = sanitizeGroupTag(groupData.tag);
   if (!tag) return null;
 
-  const payload = {
-    tag: tag,
-    name: groupData.name?.trim() || tag,
-    ownerId: groupData.ownerId || '',
-    updatedAt: serverTimestamp(),
-    createdAt: serverTimestamp()
-  };
-
   if (db) {
+    const groupRef = doc(db, 'groups', tag);
+    
+    // If creating a brand new group, verify tag isn't already taken by another active group
+    if (isNewCreation) {
+      try {
+        const existingSnap = await getDoc(groupRef);
+        if (existingSnap.exists()) {
+          const exData = existingSnap.data();
+          if (!exData.isDeleted && exData.ownerId && exData.ownerId !== groupData.ownerId) {
+            throw new Error(`Група з ключем #${tag} вже існує! Приєднайтеся до неї або оберіть інший ключ.`);
+          }
+        }
+      } catch (err) {
+        if (err.message && err.message.includes('вже існує')) {
+          throw err;
+        }
+      }
+    }
+
+    const payload = {
+      tag: tag,
+      name: groupData.name?.trim() || tag,
+      ownerId: groupData.ownerId || '',
+      adminName: groupData.adminName || 'Адміністратор',
+      isDeleted: false,
+      status: 'active',
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp()
+    };
+
     try {
-      const groupRef = doc(db, 'groups', tag);
       await setDoc(groupRef, payload, { merge: true });
     } catch (err) {
-      console.warn('Firebase save group warning (cached locally):', err);
+      console.warn('Firebase save group warning:', err);
     }
+    return payload;
   }
-  return payload;
+  return {
+    tag,
+    name: groupData.name || tag,
+    ownerId: groupData.ownerId || ''
+  };
 }
 
 /**
@@ -197,7 +223,11 @@ export async function fetchGroupMetadata(tag) {
       const groupRef = doc(db, 'groups', cleanTag);
       const snap = await getDoc(groupRef);
       if (snap.exists()) {
-        return snap.data();
+        const data = snap.data();
+        if (data.isDeleted || data.status === 'deleted') {
+          return null; // Group was deleted
+        }
+        return data;
       }
     } catch (err) {
       console.warn('Error fetching group metadata:', err);
@@ -309,35 +339,44 @@ export async function registerGroupMember(groupCode, memberObj) {
 
 /**
  * Fetch list of active members in a group with photo counts
- * Guaranteed to show current user and registered members even before first photo
+ * Guaranteed to show group creator/admin and all joined members
  */
 export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName = '', currentUserId = '') {
   const cleanTag = sanitizeGroupTag(groupCode);
   const membersMap = new Map();
 
-  // 1. Always ensure Current User is in the list
-  if (currentUserName) {
-    membersMap.set(currentUserName, {
-      name: currentUserName,
-      count: 0,
-      userId: currentUserId,
-      isAdmin: Boolean(!ownerId || (currentUserId && ownerId === currentUserId))
-    });
-  }
-
   if (!db || !cleanTag) {
+    if (currentUserName) {
+      membersMap.set(currentUserName, {
+        name: currentUserName,
+        count: 0,
+        userId: currentUserId,
+        isAdmin: true
+      });
+    }
     return Array.from(membersMap.values());
   }
 
-  // 2. Fetch Group Doc to get registered members & owner
+  // 1. Fetch Group Doc to get owner/admin and registered members
   try {
     const groupRef = doc(db, 'groups', cleanTag);
     const groupSnap = await getDoc(groupRef);
     if (groupSnap.exists()) {
       const groupData = groupSnap.data();
       const realOwnerId = groupData.ownerId || ownerId;
-      const registeredMembers = Array.isArray(groupData.members) ? groupData.members : [];
 
+      // Always include Admin in the list
+      if (groupData.adminName) {
+        membersMap.set(groupData.adminName, {
+          name: groupData.adminName,
+          count: 0,
+          userId: realOwnerId,
+          isAdmin: true
+        });
+      }
+
+      // Include all registered members
+      const registeredMembers = Array.isArray(groupData.members) ? groupData.members : [];
       registeredMembers.forEach(m => {
         const isAdm = Boolean(realOwnerId && m.uid && m.uid === realOwnerId);
         const existing = membersMap.get(m.name);
@@ -358,6 +397,19 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
     console.warn('Error reading group doc members:', e);
   }
 
+  // 2. Ensure Current User is in the list
+  if (currentUserName) {
+    const existing = membersMap.get(currentUserName);
+    if (!existing) {
+      membersMap.set(currentUserName, {
+        name: currentUserName,
+        count: 0,
+        userId: currentUserId,
+        isAdmin: Boolean(ownerId && currentUserId && ownerId === currentUserId)
+      });
+    }
+  }
+
   // 3. Count photos by member
   try {
     const q = query(collection(db, 'photos'), where('groupCode', '==', cleanTag), limit(150));
@@ -366,7 +418,7 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
       const data = docSnap.data();
       const name = data.authorName || 'Учасник';
       const userId = data.userId || '';
-      const isAdm = Boolean(ownerId && userId === ownerId);
+      const isAdm = Boolean(ownerId && userId && userId === ownerId);
 
       const existing = membersMap.get(name);
       if (existing) {

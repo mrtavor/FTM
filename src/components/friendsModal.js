@@ -68,11 +68,11 @@ export async function openFriendsModal() {
     registerGroupMember(activeGroup, { uid: currentUserId, name: currentUserName });
   }
 
-  const isAdmin = Boolean(activeGroup && (!groupOwnerId || groupOwnerId === currentUserId));
+  const isAdmin = Boolean(activeGroup && groupOwnerId && currentUserId && groupOwnerId === currentUserId);
 
   let members = [];
   if (activeGroup) {
-    members = await fetchGroupMembers(activeGroup, groupOwnerId || currentUserId, currentUserName, currentUserId);
+    members = await fetchGroupMembers(activeGroup, groupOwnerId, currentUserName, currentUserId);
   }
 
   container.innerHTML = `
@@ -340,7 +340,7 @@ function attachFriendsEvents(isAdmin, groupOwnerId) {
     };
   }
 
-  // Create Group (Frictionless on Mobile)
+  // Create Group (Frictionless with Duplicate Protection)
   if (btnSubmitCreate && inputCreateTag) {
     btnSubmitCreate.onclick = async () => {
       let rawTag = inputCreateTag.value.trim();
@@ -364,11 +364,14 @@ function attachFriendsEvents(isAdmin, groupOwnerId) {
       try {
         await ensureAuthenticatedUser();
         const uid = getCurrentUserId();
+        const currentName = getCurrentDisplayName();
+
         await saveGroupMetadata({
           tag: tagVal,
           name: nameVal,
-          ownerId: uid
-        });
+          ownerId: uid,
+          adminName: currentName
+        }, true);
 
         setActiveGroup(tagVal, nameVal);
         showToast(`Групу "${nameVal}" створено! Ви адміністратор 👑`, 'success');
@@ -377,12 +380,9 @@ function attachFriendsEvents(isAdmin, groupOwnerId) {
         openFriendsModal();
       } catch (err) {
         console.error('Error creating group:', err);
-        // Fallback local activation so user is never blocked
-        setActiveGroup(tagVal, nameVal);
-        showToast(`Групу "${nameVal}" створено! 🎉`, 'success');
-        renderMapMarkers();
-        updateHeaderGroupBadge();
-        openFriendsModal();
+        showToast(err.message || 'Помилка створення групи', 'error');
+        btnSubmitCreate.disabled = false;
+        btnSubmitCreate.textContent = 'Створити групу';
       }
     };
   }
@@ -393,7 +393,7 @@ function attachFriendsEvents(isAdmin, groupOwnerId) {
     };
   }
 
-  // Join by Tag
+  // Join by Tag (Strictly connects to existing group)
   if (btnSubmitJoin && inputJoinTag) {
     btnSubmitJoin.onclick = async () => {
       const raw = inputJoinTag.value.trim();
@@ -408,20 +408,25 @@ function attachFriendsEvents(isAdmin, groupOwnerId) {
 
       try {
         const meta = await fetchGroupMetadata(tagVal);
-        const name = meta ? meta.name : tagVal;
+        if (!meta) {
+          showToast(`Групу з ключем #${tagVal} не знайдено. Перевірте правильність тегу.`, 'error');
+          btnSubmitJoin.disabled = false;
+          btnSubmitJoin.textContent = 'Зайти';
+          return;
+        }
 
+        const name = meta.name || tagVal;
         setActiveGroup(tagVal, name);
+        await registerGroupMember(tagVal, { uid: getCurrentUserId(), name: getCurrentDisplayName() });
         showToast(`Ви приєдналися до групи "${name}" 👥`, 'success');
         renderMapMarkers();
         updateHeaderGroupBadge();
         openFriendsModal();
       } catch (err) {
         console.error('Error joining group:', err);
-        setActiveGroup(tagVal, tagVal);
-        showToast(`Ви приєдналися до групи "${tagVal}" 👥`, 'success');
-        renderMapMarkers();
-        updateHeaderGroupBadge();
-        openFriendsModal();
+        showToast('Помилка підключення до групи', 'error');
+        btnSubmitJoin.disabled = false;
+        btnSubmitJoin.textContent = 'Зайти';
       }
     };
   }

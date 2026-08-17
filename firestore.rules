@@ -2,21 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Колекція груп друзів з правами адміністратора
+    // Колекція груп друзів
     match /groups/{groupTag} {
       allow read: if true;
-      allow create: if request.auth != null
-        && request.resource.data.name is string
-        && request.resource.data.name.size() <= 80
-        && request.resource.data.tag is string
-        && request.resource.data.tag.size() <= 50;
-        
-      // Оновлення налаштувань або видалення групи — тільки творцем (Адміністратором)
-      allow update: if request.auth != null
-        && (resource.data.ownerId == request.auth.uid || resource.data.ownerId == null || resource.data.ownerId == '');
-        
-      allow delete: if request.auth != null 
-        && resource.data.ownerId == request.auth.uid;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null && (resource.data.ownerId == request.auth.uid || resource.data.ownerId == null);
     }
 
     // Колекція фотографій на карті
