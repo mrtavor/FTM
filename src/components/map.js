@@ -224,23 +224,17 @@ export function renderMapMarkers() {
     });
   }
 
-  clusterGroup.clearLayers();
   singleMarkersLayer.clearLayers();
-
-  if (currentZoom <= 10) {
-    const markers = visiblePhotos.map((photo) => createMarkerForPhoto(photo, 'emoji'));
-    clusterGroup.addLayers(markers);
-  } else if (currentZoom >= 11 && currentZoom <= 14) {
-    visiblePhotos.forEach((photo) => {
-      const marker = createMarkerForPhoto(photo, 'emoji');
-      singleMarkersLayer.addLayer(marker);
-    });
-  } else {
-    visiblePhotos.forEach((photo) => {
-      const marker = createMarkerForPhoto(photo, 'thumb');
-      singleMarkersLayer.addLayer(marker);
-    });
+  if (clusterGroup) {
+    clusterGroup.clearLayers();
   }
+
+  // Render all markers directly to singleMarkersLayer for guaranteed 100% click response on PC and Mobile
+  visiblePhotos.forEach((photo) => {
+    const styleType = currentZoom >= 14 ? 'thumb' : 'emoji';
+    const marker = createMarkerForPhoto(photo, styleType);
+    singleMarkersLayer.addLayer(marker);
+  });
 }
 
 /**
