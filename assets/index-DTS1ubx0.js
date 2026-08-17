@@ -3201,45 +3201,47 @@ Please create an issue at https://github.com/MikeKovarik/exifr with this file`),
                   </div>
                 </div>
 
-                <!-- Controls: Settings & Leave buttons -->
+                <!-- Controls: Settings (Admin Only) & Leave buttons -->
                 <div style="display: flex; gap: 6px; align-items: center;">
-                  <button id="btn-toggle-group-settings" class="btn-secondary" style="font-size: 12px; padding: 6px 10px; display: flex; align-items: center; gap: 4px;" title="Змінити назву чи ключ групи">
-                    <span>⚙️</span>
-                    <span>Налаштування</span>
-                  </button>
+                  ${_?`
+                    <button id="btn-toggle-group-settings" class="btn-secondary" style="font-size: 12px; padding: 6px 10px; display: flex; align-items: center; gap: 4px;" title="Налаштування групи (Тільки для адміна)">
+                      <span>⚙️</span>
+                      <span>Налаштування</span>
+                    </button>
+                  `:""}
                   <button id="btn-leave-group" class="btn-danger" style="padding: 6px 10px; font-size: 12px;">
                     Вийти
                   </button>
                 </div>
               </div>
 
-              <!-- Group Edit Settings Block (Toggled by ⚙️) -->
-              <div id="group-edit-block" style="display: ${cn?"block":"none"}; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-color);">
-                <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--text-main);">
-                  ⚙️ Налаштування групи:
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 10px;">
-                  <div>
-                    <label class="form-label" style="font-size: 12px;">Назва групи:</label>
-                    <input type="text" id="edit-group-name" class="form-input-text" value="${o}" maxlength="50" placeholder="Подорож у гори 🌲" />
+              <!-- Group Edit Settings Block (Visible only to 👑 Admin when toggled) -->
+              ${_?`
+                <div id="group-edit-block" style="display: ${cn?"block":"none"}; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-color);">
+                  <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--text-main); display: flex; align-items: center; justify-content: space-between;">
+                    <span>⚙️ Налаштування групи (👑 Адмін):</span>
                   </div>
-                  <div>
-                    <label class="form-label" style="font-size: 12px;">Ключ / Тег групи:</label>
-                    <input type="text" id="edit-group-tag" class="form-input-text" value="${e}" maxlength="30" placeholder="КАРПАТИ_2026" />
-                  </div>
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; gap: 8px; flex-wrap: wrap;">
-                    ${_?`
-                      <button id="btn-delete-entire-group" class="btn-danger" style="font-size: 12px; padding: 8px 12px;">
+                  <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div>
+                      <label class="form-label" style="font-size: 12px;">Назва групи:</label>
+                      <input type="text" id="edit-group-name" class="form-input-text" value="${o}" maxlength="50" placeholder="Подорож у гори 🌲" />
+                    </div>
+                    <div>
+                      <label class="form-label" style="font-size: 12px;">Ключ / Тег групи:</label>
+                      <input type="text" id="edit-group-tag" class="form-input-text" value="${e}" maxlength="30" placeholder="КАРПАТИ_2026" />
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; gap: 8px; flex-wrap: wrap;">
+                      <button id="btn-delete-entire-group" class="btn-danger" style="font-size: 12px; padding: 8px 12px; background: #DC2626; color: #FFFFFF;">
                         🗑️ Видалити групу
                       </button>
-                    `:"<div></div>"}
-                    <div style="display: flex; gap: 6px;">
-                      <button id="btn-cancel-group-edit" class="btn-secondary" style="font-size: 12px; padding: 8px 12px;">Скасувати</button>
-                      <button id="btn-save-group-edit" class="btn-primary" style="font-size: 12px; padding: 8px 14px;">Зберегти</button>
+                      <div style="display: flex; gap: 6px;">
+                        <button id="btn-cancel-group-edit" class="btn-secondary" style="font-size: 12px; padding: 8px 12px;">Скасувати</button>
+                        <button id="btn-save-group-edit" class="btn-primary" style="font-size: 12px; padding: 8px 14px;">Зберегти зміни</button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              `:""}
 
               <!-- Share Link -->
               <div style="margin-top: 12px;">
