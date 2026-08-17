@@ -65,11 +65,11 @@ export async function openFriendsModal() {
     return;
   }
 
-  const isAdmin = Boolean(isGoogle && activeGroup && groupOwnerId && groupOwnerId === currentUserId);
+  const isAdmin = Boolean(isGoogle && activeGroup && (!groupOwnerId || groupOwnerId === currentUserId));
 
   let members = [];
   if (isGoogle && activeGroup) {
-    members = await fetchGroupMembers(activeGroup, groupOwnerId);
+    members = await fetchGroupMembers(activeGroup, groupOwnerId || currentUserId);
   }
 
   container.innerHTML = `
@@ -408,26 +408,47 @@ function attachFriendsEvents(isAdmin) {
   // Save edited group name / tag (Admin Only)
   if (btnSaveEdit) {
     btnSaveEdit.onclick = async () => {
-      const newName = document.getElementById('edit-group-name').value.trim();
-      const newTag = document.getElementById('edit-group-tag').value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      const editNameInput = document.getElementById('edit-group-name');
+      const editTagInput = document.getElementById('edit-group-tag');
+      if (!editNameInput || !editTagInput) return;
+
+      const newName = editNameInput.value.trim();
+      const newTag = editTagInput.value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      const oldTag = getActiveGroupCode();
 
       if (!newTag) {
         showToast('Ключ групи не може бути порожнім', 'error');
         return;
       }
 
-      await saveGroupMetadata({
-        tag: newTag,
-        name: newName || newTag,
-        ownerId: getCurrentUserId()
-      });
+      btnSaveEdit.disabled = true;
+      btnSaveEdit.textContent = 'Збереження...';
 
-      setActiveGroup(newTag, newName || newTag);
-      isEditingSettings = false;
-      showToast('Налаштування групи збережено! ✨', 'success');
-      renderMapMarkers();
-      updateHeaderGroupBadge();
-      openFriendsModal();
+      try {
+        const uid = getCurrentUserId();
+        await saveGroupMetadata({
+          tag: newTag,
+          name: newName || newTag,
+          ownerId: groupOwnerId || uid
+        });
+
+        // If tag changed, delete old group doc
+        if (oldTag && oldTag !== newTag) {
+          try { await deleteGroup(oldTag); } catch(e) {}
+        }
+
+        setActiveGroup(newTag, newName || newTag);
+        isEditingSettings = false;
+        showToast('Налаштування групи успішно збережено! ✨', 'success');
+        renderMapMarkers();
+        updateHeaderGroupBadge();
+        openFriendsModal();
+      } catch (err) {
+        console.error('Error saving group settings:', err);
+        showToast('Помилка збереження: ' + (err.message || 'Спробуйте ще раз'), 'error');
+        btnSaveEdit.disabled = false;
+        btnSaveEdit.textContent = 'Зберегти';
+      }
     };
   }
 
