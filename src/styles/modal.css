@@ -86,12 +86,14 @@
 
 .modal-footer {
   padding: 14px 20px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border-color);
   background-color: var(--bg-primary);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 /* ==========================================================================
@@ -141,25 +143,19 @@
   cursor: pointer;
 }
 
-/* Preview Card (Clean, Full-width, No black borders) */
+/* Preview Card */
 .preview-card {
   position: relative;
   width: 100%;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background-color: var(--bg-subtle);
   border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  box-shadow: var(--shadow-md);
 }
 
 .preview-img {
   width: 100%;
   height: auto;
-  max-height: 380px;
-  object-fit: contain;
   display: block;
   border-radius: calc(var(--radius-md) - 1px);
 }

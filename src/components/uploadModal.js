@@ -101,8 +101,9 @@ export function openUploadModal() {
         </div>
 
         <div class="modal-footer">
-          <button class="btn-secondary" id="btn-cancel-upload">Скасувати</button>
-          <button class="btn-primary" id="btn-submit-upload" disabled>
+          <button class="btn-secondary" id="btn-cancel-upload" style="touch-action: manipulation;">Скасувати</button>
+          <button class="btn-primary" id="btn-submit-upload" disabled
+            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
             <span>Опублікувати</span>
           </button>
         </div>
@@ -224,7 +225,7 @@ async function handleFileSelected(file) {
   emojiGroup.style.display = 'block';
   descGroup.style.display = 'block';
 
-  btnSubmit.disabled = !currentCoords;
+  btnSubmit.disabled = false;
 }
 
 function renderGpsStatusBox(container) {
@@ -296,8 +297,12 @@ function useCurrentDeviceLocation() {
 }
 
 async function handleUploadSubmit() {
-  if (!processedData || !currentCoords) {
-    showToast('Оберіть фото та вкажіть місце', 'error');
+  if (!processedData) {
+    showToast('Оберіть фото', 'error');
+    return;
+  }
+  if (!currentCoords) {
+    showToast('Вкажіть місце на карті або натисніть «Моє місце» 📍', 'error', 3000);
     return;
   }
 
