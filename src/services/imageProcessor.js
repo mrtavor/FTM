@@ -142,6 +142,20 @@ export async function processImageClientSide(file, options = {}) {
 }
 
 /**
+ * Convert Blob to base64 Data URL
+ * @param {Blob} blob 
+ * @returns {Promise<string>}
+ */
+export function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
  * Format bytes into human readable string (KB / MB)
  */
 export function formatBytes(bytes) {
