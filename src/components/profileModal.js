@@ -1,5 +1,5 @@
 /**
- * Simplified Human-Friendly Profile & Google Sign-In Modal
+ * Profile & Country Map Positioning Modal
  */
 import {
   getCurrentUser,
@@ -9,7 +9,9 @@ import {
   loginWithGoogle,
   logoutUser
 } from '../services/authService.js';
+import { COUNTRIES, getUserCountry, setUserCountry } from '../services/countryService.js';
 import { updateHeaderGroupBadge } from './friendsModal.js';
+import { flyToCoords } from './map.js';
 import { showToast } from '../utils/toast.js';
 
 export function openProfileModal() {
@@ -19,6 +21,7 @@ export function openProfileModal() {
   const isGoogle = isGoogleUser();
   const currentNick = getCurrentDisplayName();
   const user = getCurrentUser();
+  const currentCountry = getUserCountry();
 
   container.innerHTML = `
     <div class="modal-backdrop" id="profile-modal-backdrop">
@@ -41,6 +44,21 @@ export function openProfileModal() {
                 Зберегти
               </button>
             </div>
+          </div>
+
+          <!-- Country / Region Map Centering -->
+          <div style="background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-md);">
+            <label class="form-label" style="margin-bottom: 4px;">🌍 Регіон / Країна карти за замовчуванням:</label>
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+              Карта автоматично відкриватиметься та фокусуватиметься на обраній країні.
+            </div>
+            <select id="select-user-country" class="form-input-text" style="padding: 10px 12px; font-size: 13px; font-weight: 600;">
+              ${COUNTRIES.map((c) => `
+                <option value="${c.code}" ${c.code === currentCountry.code ? 'selected' : ''}>
+                  ${c.flag} ${c.name}
+                </option>
+              `).join('')}
+            </select>
           </div>
 
           <!-- Google Account Card -->
@@ -89,6 +107,7 @@ function attachProfileEvents() {
   const btnCloseFooter = document.getElementById('btn-close-profile-footer');
   const btnSaveNick = document.getElementById('btn-save-nickname');
   const inputNick = document.getElementById('input-nickname');
+  const selectCountry = document.getElementById('select-user-country');
   const btnGoogle = document.getElementById('btn-google-login');
   const btnLogout = document.getElementById('btn-logout');
 
@@ -101,6 +120,16 @@ function attachProfileEvents() {
   backdrop.onclick = (e) => {
     if (e.target === backdrop) close();
   };
+
+  // Country Selection Change
+  if (selectCountry) {
+    selectCountry.onchange = () => {
+      const code = selectCountry.value;
+      const country = setUserCountry(code);
+      showToast(`Карту налаштовано на: ${country.flag} ${country.name}`, 'success');
+      flyToCoords(country.lat, country.lng, country.zoom);
+    };
+  }
 
   if (btnSaveNick && inputNick) {
     btnSaveNick.onclick = async () => {

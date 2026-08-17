@@ -9,6 +9,7 @@ import { openUploadModal } from './components/uploadModal.js';
 import { openProfileModal, updateHeaderNickDisplay } from './components/profileModal.js';
 import { openFriendsModal, updateHeaderGroupBadge } from './components/friendsModal.js';
 import { openGalleryModal } from './components/galleryModal.js';
+import { getUserCountry } from './services/countryService.js';
 import { initVersionChecker } from './utils/versionChecker.js';
 import { loadSampleLocations } from './utils/mockData.js';
 
@@ -84,7 +85,8 @@ function setupNavigationAndControls() {
   const navExplore = document.getElementById('nav-btn-explore');
   if (navExplore && map) {
     navExplore.onclick = () => {
-      map.flyTo([48.3794, 31.1656], 6, { duration: 1.2 });
+      const country = getUserCountry();
+      map.flyTo([country.lat, country.lng], country.zoom, { duration: 1.2 });
     };
   }
 

@@ -13,6 +13,7 @@ import { getActiveGroupCode, getFilterMode, onGroupChange, notifyNewGroupPhoto, 
 import { getCurrentDisplayName } from '../services/authService.js';
 import { updateHeaderGroupBadge } from './friendsModal.js';
 import { openPhotoDetailModal } from './photoDetailModal.js';
+import { getUserCountry } from '../services/countryService.js';
 import { showToast } from '../utils/toast.js';
 
 let mapInstance = null;
@@ -24,18 +25,17 @@ let debounceTimer = null;
 let groupUnsubscribe = null;
 let metaUnsubscribe = null;
 
-const DEFAULT_CENTER = [48.3794, 31.1656];
-const DEFAULT_ZOOM = 6;
-
 /**
- * Initialize Leaflet Map with optimized tile caching
+ * Initialize Leaflet Map with country-based initial position
  */
 export function initMap(containerId = 'map') {
   if (mapInstance) return mapInstance;
 
+  const country = getUserCountry();
+
   mapInstance = L.map(containerId, {
-    center: DEFAULT_CENTER,
-    zoom: DEFAULT_ZOOM,
+    center: [country.lat, country.lng],
+    zoom: country.zoom,
     minZoom: 3,
     maxZoom: 19,
     zoomControl: false,
