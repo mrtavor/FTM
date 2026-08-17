@@ -336,12 +336,13 @@ export function showPhotoViewer(photo, onChanged) {
     isLiking = true;
 
     // Optimistic update
-    if (isLiked) {
-      isLiked = false;
-      likes = likes.filter(l => l.userId !== currentUserId);
+    const checkLiked = (l) => (typeof l === 'string' ? l === currentUserId : l?.userId === currentUserId);
+    const wasLiked = likes.some(checkLiked);
+    isLiked = !wasLiked;
+    if (wasLiked) {
+      likes = likes.filter(l => !checkLiked(l));
     } else {
-      isLiked = true;
-      likes = [...likes, { userId: currentUserId, userName: currentUserName }];
+      likes = [...likes, currentUserId];
     }
     refreshLikesUI();
 
@@ -525,13 +526,14 @@ export function showPhotoViewer(photo, onChanged) {
 
   // Start real-time subscriptions
   likesUnsub = subscribeToLikes(photo.id, (newLikes) => {
-    likes = newLikes;
-    isLiked = newLikes.some(l => l.userId === currentUserId);
+    likes = Array.isArray(newLikes) ? newLikes : [];
+    const checkLiked = (l) => (typeof l === 'string' ? l === currentUserId : l?.userId === currentUserId);
+    isLiked = likes.some(checkLiked);
     refreshLikesUI();
   });
 
   commentsUnsub = subscribeToComments(photo.id, (newComments) => {
-    comments = newComments;
+    comments = Array.isArray(newComments) ? newComments : [];
     refreshCommentsUI();
   });
 }
