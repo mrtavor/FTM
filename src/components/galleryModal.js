@@ -6,7 +6,7 @@
 import { getCurrentUserId } from '../services/authService.js';
 import { getActiveGroupCode, getActiveGroupName } from '../services/groupService.js';
 import { fetchUserPhotos, fetchGroupPhotos } from '../services/firebase.js';
-import { openPhotoDetailModal } from './photoDetailModal.js';
+import { showPhotoViewer } from './photoViewer.js';
 import { openUploadModal } from './uploadModal.js';
 import { flyToCoords, renderMapMarkers } from './map.js';
 import { showToast } from '../utils/toast.js';
@@ -157,7 +157,7 @@ function attachGalleryEvents(photos) {
       if (targetPhoto) {
         close();
         flyToCoords(targetPhoto.lat, targetPhoto.lng, 15);
-        openPhotoDetailModal(targetPhoto);
+        showPhotoViewer(targetPhoto, () => renderMapMarkers());
       }
     };
   });

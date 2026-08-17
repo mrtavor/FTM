@@ -12,7 +12,7 @@ import { fetchPhotosForGeohashes, subscribeToGroupUpdates, subscribeToGroupMetad
 import { getActiveGroupCode, getFilterMode, onGroupChange, notifyNewGroupPhoto, clearActiveGroup, setActiveGroup } from '../services/groupService.js';
 import { getCurrentDisplayName } from '../services/authService.js';
 import { updateHeaderGroupBadge } from './friendsModal.js';
-import { openPhotoDetailModal } from './photoDetailModal.js';
+import { showPhotoViewer } from './photoViewer.js';
 import { getUserCountry } from '../services/countryService.js';
 import { showToast } from '../utils/toast.js';
 
@@ -53,7 +53,7 @@ export function initMap(containerId = 'map') {
         if (photo) {
           e.preventDefault();
           e.stopPropagation();
-          openPhotoDetailModal(photo);
+          showPhotoViewer(photo, () => renderMapMarkers());
         }
       }
     }, true);
@@ -303,7 +303,7 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
       L.DomEvent.stopPropagation(e);
       L.DomEvent.preventDefault(e);
     }
-    openPhotoDetailModal(photo);
+    showPhotoViewer(photo, () => renderMapMarkers());
   });
 
   // 2. Direct Native DOM Click & Mouseup Event for Desktop Mice
@@ -313,7 +313,7 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
       el.style.cursor = 'pointer';
       el.onclick = (e) => {
         e.stopPropagation();
-        openPhotoDetailModal(photo);
+        showPhotoViewer(photo, () => renderMapMarkers());
       };
     }
   });
