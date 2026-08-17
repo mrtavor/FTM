@@ -263,18 +263,26 @@
   box-shadow: 0 0 0 2px rgba(224, 122, 95, 0.25);
 }
 
-/* Inputs */
+/* Inputs (16px base font to prevent iOS Safari auto-zoom) */
 .form-input-text {
   width: 100%;
-  padding: 10px 14px;
+  padding: 11px 14px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
   background-color: var(--bg-primary);
   color: var(--text-main);
   transition: border-color 0.2s;
   resize: vertical;
+  touch-action: manipulation;
+  -webkit-appearance: none;
+}
+
+@media (min-width: 640px) {
+  .form-input-text {
+    font-size: 14px;
+  }
 }
 
 .form-input-text:focus {
