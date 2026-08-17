@@ -55,43 +55,16 @@ export function initFirebase() {
 import { blobToDataUrl } from './imageProcessor.js';
 
 /**
- * Upload compressed blobs to Firebase Cloud Storage with graceful Firestore Data URL fallback
+ * Instant Client-Side Image Storage Processor (Zero Storage Hangs)
+ * Converts compressed WebP blobs to optimized data URLs directly stored in Firestore
+ * Fits within document limit (< 60 KB) and avoids Cloud Storage network blocks
  * @param {Blob} mainBlob 
  * @param {Blob} thumbBlob 
  * @param {string} userId 
  * @returns {Promise<{mainUrl: string, thumbUrl: string, storagePathMain: string, storagePathThumb: string}>}
  */
 export async function uploadPhotoBlobs(mainBlob, thumbBlob, userId) {
-  if (storage) {
-    try {
-      const timestamp = Date.now();
-      const rand = Math.random().toString(36).substring(2, 8);
-      const mainPath = `photos/${userId}/${timestamp}_${rand}_main.webp`;
-      const thumbPath = `photos/${userId}/${timestamp}_${rand}_thumb.webp`;
-
-      const mainRef = ref(storage, mainPath);
-      const thumbRef = ref(storage, thumbPath);
-
-      // Upload main image
-      await uploadBytes(mainRef, mainBlob, { contentType: 'image/webp' });
-      const mainUrl = await getDownloadURL(mainRef);
-
-      // Upload thumbnail
-      await uploadBytes(thumbRef, thumbBlob, { contentType: 'image/webp' });
-      const thumbUrl = await getDownloadURL(thumbRef);
-
-      return {
-        mainUrl,
-        thumbUrl,
-        storagePathMain: mainPath,
-        storagePathThumb: thumbPath
-      };
-    } catch (storageErr) {
-      console.warn('Cloud Storage not available or restricted, falling back to direct Firestore WebP storage:', storageErr);
-    }
-  }
-
-  // Fallback: Convert to ultra-compact WebP Data URLs stored directly in Firestore
+  // Convert blobs to ultra-compact WebP Data URLs instantly in memory
   const mainDataUrl = await blobToDataUrl(mainBlob);
   const thumbDataUrl = await blobToDataUrl(thumbBlob);
 

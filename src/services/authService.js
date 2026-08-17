@@ -137,7 +137,26 @@ export function getCurrentUser() {
   return currentUser;
 }
 
+export async function ensureAuthenticatedUser() {
+  if (auth && auth.currentUser) {
+    return auth.currentUser;
+  }
+  if (auth) {
+    try {
+      const cred = await signInAnonymously(auth);
+      currentUser = cred.user;
+      return cred.user;
+    } catch (e) {
+      console.warn('ensureAuthenticatedUser anonymous sign-in error:', e);
+    }
+  }
+  return currentUser;
+}
+
 export function getCurrentUserId() {
+  if (auth && auth.currentUser) {
+    return auth.currentUser.uid;
+  }
   return currentUser ? currentUser.uid : 'anonymous_guest';
 }
 

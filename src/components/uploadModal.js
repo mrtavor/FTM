@@ -8,7 +8,7 @@
  */
 import { extractExifGps, processImageClientSide, formatBytes } from '../services/imageProcessor.js';
 import { uploadPhotoBlobs, savePhotoDocument } from '../services/firebase.js';
-import { getCurrentUserId, getCurrentDisplayName } from '../services/authService.js';
+import { getCurrentUserId, getCurrentDisplayName, ensureAuthenticatedUser } from '../services/authService.js';
 import { geoService } from '../services/geoService.js';
 import { startManualLocationPicker, renderMapMarkers, flyToCoords } from './map.js';
 import { showToast } from '../utils/toast.js';
@@ -343,23 +343,24 @@ async function handleUploadSubmit() {
 
   btnSubmit.disabled = true;
   progressBox.style.display = 'block';
-  progressFill.style.width = '25%';
-  percentText.textContent = '25%';
-  statusText.textContent = 'Завантаження фото у сховище...';
+  progressFill.style.width = '35%';
+  percentText.textContent = '35%';
+  statusText.textContent = 'Оптимізація та стиснення...';
 
   try {
-    const userId = getCurrentUserId();
+    const user = await ensureAuthenticatedUser();
+    const userId = user ? user.uid : getCurrentUserId();
 
-    // 1. Upload compressed blobs to Storage
+    progressFill.style.width = '70%';
+    percentText.textContent = '70%';
+    statusText.textContent = 'Збереження гео-мітки у базу...';
+
+    // 1. Convert to optimized WebP Data URLs
     const storageUrls = await uploadPhotoBlobs(
       processedData.mainBlob,
       processedData.thumbBlob,
       userId
     );
-
-    progressFill.style.width = '75%';
-    percentText.textContent = '75%';
-    statusText.textContent = 'Збереження гео-мітки...';
 
     // 2. Calculate Geohash
     const geohashVal = geoService.encode(currentCoords.lat, currentCoords.lng, 9);
@@ -381,7 +382,7 @@ async function handleUploadSubmit() {
 
     progressFill.style.width = '100%';
     percentText.textContent = '100%';
-    statusText.textContent = 'Готово!';
+    statusText.textContent = 'Опубліковано!';
 
     showToast('Фото успішно додано на карту! 🎉', 'success');
 
@@ -394,7 +395,7 @@ async function handleUploadSubmit() {
       // Fly map to new photo coordinates and re-render
       flyToCoords(currentCoords.lat, currentCoords.lng, 15);
       renderMapMarkers();
-    }, 400);
+    }, 350);
 
   } catch (err) {
     console.error('Upload failed:', err);
