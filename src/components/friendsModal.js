@@ -13,7 +13,8 @@ import {
   isGroupNotificationEnabled,
   setGroupNotificationEnabled,
   isMemberNotificationEnabled,
-  setMemberNotificationEnabled
+  setMemberNotificationEnabled,
+  sanitizeGroupTag
 } from '../services/groupService.js';
 import { isGoogleUser, loginWithGoogle, getCurrentUserId, getCurrentDisplayName } from '../services/authService.js';
 import {
@@ -340,51 +341,81 @@ function attachFriendsEvents(isAdmin, groupOwnerId) {
   // Create Group
   if (btnSubmitCreate && inputCreateTag) {
     btnSubmitCreate.onclick = async () => {
-      const tagVal = inputCreateTag.value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-      const nameVal = inputCreateName ? inputCreateName.value.trim() || tagVal : tagVal;
+      let rawTag = inputCreateTag.value.trim();
+      const rawName = inputCreateName ? inputCreateName.value.trim() : '';
+
+      // If tag is empty but name is provided, derive tag from name
+      if (!rawTag && rawName) {
+        rawTag = rawName;
+      }
+
+      const tagVal = sanitizeGroupTag(rawTag);
+      const nameVal = rawName || tagVal;
 
       if (!tagVal) {
-        showToast('Введіть ключ/тег групи', 'error');
+        showToast('Введіть назву або ключ групи', 'error');
         return;
       }
 
-      await saveGroupMetadata({
-        tag: tagVal,
-        name: nameVal,
-        ownerId: getCurrentUserId()
-      });
+      btnSubmitCreate.disabled = true;
+      btnSubmitCreate.textContent = 'Створення...';
 
-      setActiveGroup(tagVal, nameVal);
-      showToast(`Групу "${nameVal}" створено! Ви адміністратор 👑`, 'success');
-      renderMapMarkers();
-      updateHeaderGroupBadge();
-      openFriendsModal();
+      try {
+        const uid = getCurrentUserId();
+        await saveGroupMetadata({
+          tag: tagVal,
+          name: nameVal,
+          ownerId: uid
+        });
+
+        setActiveGroup(tagVal, nameVal);
+        showToast(`Групу "${nameVal}" створено! Ви адміністратор 👑`, 'success');
+        renderMapMarkers();
+        updateHeaderGroupBadge();
+        openFriendsModal();
+      } catch (err) {
+        console.error('Error creating group:', err);
+        showToast('Помилка створення: ' + (err.message || 'Спробуйте іншу назву'), 'error');
+        btnSubmitCreate.disabled = false;
+        btnSubmitCreate.textContent = 'Створити групу';
+      }
     };
   }
 
   if (btnGenTag && inputCreateTag) {
     btnGenTag.onclick = () => {
-      inputCreateTag.value = 'GROUP-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      inputCreateTag.value = 'ГРУПА_' + Math.random().toString(36).substring(2, 6).toUpperCase();
     };
   }
 
   // Join by Tag
   if (btnSubmitJoin && inputJoinTag) {
     btnSubmitJoin.onclick = async () => {
-      const tagVal = inputJoinTag.value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      const raw = inputJoinTag.value.trim();
+      const tagVal = sanitizeGroupTag(raw);
       if (!tagVal) {
-        showToast('Введіть ключ групи', 'error');
+        showToast('Введіть ключ/тег групи', 'error');
         return;
       }
 
-      const meta = await fetchGroupMetadata(tagVal);
-      const name = meta ? meta.name : tagVal;
+      btnSubmitJoin.disabled = true;
+      btnSubmitJoin.textContent = 'Пошук...';
 
-      setActiveGroup(tagVal, name);
-      showToast(`Ви приєдналися до групи "${name}" 👥`, 'success');
-      renderMapMarkers();
-      updateHeaderGroupBadge();
-      openFriendsModal();
+      try {
+        const meta = await fetchGroupMetadata(tagVal);
+        const name = meta ? meta.name : tagVal;
+
+        setActiveGroup(tagVal, name);
+        showToast(`Ви приєдналися до групи "${name}" 👥`, 'success');
+        renderMapMarkers();
+        updateHeaderGroupBadge();
+        openFriendsModal();
+      } catch (err) {
+        console.error('Error joining group:', err);
+        showToast('Помилка підключення до групи', 'error');
+        btnSubmitJoin.disabled = false;
+        btnSubmitJoin.textContent = 'Зайти';
+      }
     };
   }
 
@@ -411,7 +442,7 @@ function attachFriendsEvents(isAdmin, groupOwnerId) {
       if (!editNameInput || !editTagInput) return;
 
       const newName = editNameInput.value.trim();
-      const newTag = editTagInput.value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      const newTag = sanitizeGroupTag(editTagInput.value);
       const oldTag = getActiveGroupCode();
 
       if (!newTag) {

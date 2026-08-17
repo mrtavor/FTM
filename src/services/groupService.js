@@ -1,5 +1,6 @@
 /**
  * Friends Circle, Group Metadata, Members & Real-time Notifications Service
+ * Full Unicode & Cyrillic (Ukrainian) Tag Support
  */
 import { showToast } from '../utils/toast.js';
 
@@ -14,12 +15,24 @@ let activeGroupName = '';
 let filterMode = 'all';
 const groupListeners = [];
 
+/**
+ * Sanitize Group Tag with full Ukrainian & Unicode support
+ */
+export function sanitizeGroupTag(str) {
+  if (!str) return '';
+  return str
+    .trim()
+    .toUpperCase()
+    .replace(/[\s\/\\]+/g, '_')
+    .replace(/[^\p{L}\p{N}_\-]/gu, '');
+}
+
 function initGroupFromStorage() {
   const urlParams = new URLSearchParams(window.location.search);
   const paramGroup = urlParams.get('group');
   
   if (paramGroup) {
-    activeGroupCode = paramGroup.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    activeGroupCode = sanitizeGroupTag(paramGroup);
     activeGroupName = activeGroupCode;
     localStorage.setItem(GROUP_KEY, activeGroupCode);
     localStorage.setItem(GROUP_NAME_KEY, activeGroupName);
@@ -42,7 +55,7 @@ export function getActiveGroupName() {
 }
 
 export function setActiveGroup(tag, name) {
-  const cleanTag = (tag || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  const cleanTag = sanitizeGroupTag(tag);
   activeGroupCode = cleanTag;
   activeGroupName = name?.trim() || cleanTag;
 

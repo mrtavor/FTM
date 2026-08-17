@@ -155,14 +155,16 @@ export async function fetchPhotosForGeohashes(geohashes) {
 }
 
 import { onSnapshot, getDoc } from 'firebase/firestore';
+import { sanitizeGroupTag } from './groupService.js';
 
 /**
  * Save or create Group metadata (Name + Tag)
  */
 export async function saveGroupMetadata(groupData) {
-  if (!db || !groupData.tag) return;
-  const tag = groupData.tag.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-  const groupRef = doc(db, 'groups', tag);
+  if (!groupData.tag) return null;
+  const tag = sanitizeGroupTag(groupData.tag);
+  if (!tag) return null;
+
   const payload = {
     tag: tag,
     name: groupData.name?.trim() || tag,
@@ -170,7 +172,15 @@ export async function saveGroupMetadata(groupData) {
     updatedAt: serverTimestamp(),
     createdAt: serverTimestamp()
   };
-  await setDoc(groupRef, payload, { merge: true });
+
+  if (db) {
+    try {
+      const groupRef = doc(db, 'groups', tag);
+      await setDoc(groupRef, payload, { merge: true });
+    } catch (err) {
+      console.warn('Firebase save group warning (cached locally):', err);
+    }
+  }
   return payload;
 }
 
@@ -178,16 +188,20 @@ export async function saveGroupMetadata(groupData) {
  * Fetch Group metadata by Tag
  */
 export async function fetchGroupMetadata(tag) {
-  if (!db || !tag) return null;
-  try {
-    const cleanTag = tag.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-    const groupRef = doc(db, 'groups', cleanTag);
-    const snap = await getDoc(groupRef);
-    if (snap.exists()) {
-      return snap.data();
+  if (!tag) return null;
+  const cleanTag = sanitizeGroupTag(tag);
+  if (!cleanTag) return null;
+
+  if (db) {
+    try {
+      const groupRef = doc(db, 'groups', cleanTag);
+      const snap = await getDoc(groupRef);
+      if (snap.exists()) {
+        return snap.data();
+      }
+    } catch (err) {
+      console.warn('Error fetching group metadata:', err);
     }
-  } catch (err) {
-    console.warn('Error fetching group metadata:', err);
   }
   return null;
 }
@@ -196,10 +210,16 @@ export async function fetchGroupMetadata(tag) {
  * Delete a Group (Admin Only)
  */
 export async function deleteGroup(tag) {
-  if (!db || !tag) return;
-  const cleanTag = tag.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-  const groupRef = doc(db, 'groups', cleanTag);
-  await deleteDoc(groupRef);
+  const cleanTag = sanitizeGroupTag(tag);
+  if (!cleanTag) return;
+  if (db) {
+    try {
+      const groupRef = doc(db, 'groups', cleanTag);
+      await deleteDoc(groupRef);
+    } catch (e) {
+      console.warn('Delete group warning:', e);
+    }
+  }
   return true;
 }
 
@@ -207,17 +227,22 @@ export async function deleteGroup(tag) {
  * Kick a member from Group by adding to banned list
  */
 export async function kickMemberFromGroup(groupTag, memberName) {
-  if (!db || !groupTag || !memberName) return;
-  const cleanTag = groupTag.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-  const groupRef = doc(db, 'groups', cleanTag);
-  const snap = await getDoc(groupRef);
-  
-  if (snap.exists()) {
-    const data = snap.data();
-    const banned = Array.isArray(data.bannedMembers) ? data.bannedMembers : [];
-    if (!banned.includes(memberName)) {
-      banned.push(memberName);
-      await setDoc(groupRef, { bannedMembers: banned }, { merge: true });
+  const cleanTag = sanitizeGroupTag(groupTag);
+  if (!cleanTag || !memberName) return;
+  if (db) {
+    try {
+      const groupRef = doc(db, 'groups', cleanTag);
+      const snap = await getDoc(groupRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        const banned = Array.isArray(data.bannedMembers) ? data.bannedMembers : [];
+        if (!banned.includes(memberName)) {
+          banned.push(memberName);
+          await setDoc(groupRef, { bannedMembers: banned }, { merge: true });
+        }
+      }
+    } catch (e) {
+      console.warn('Kick member warning:', e);
     }
   }
   return true;
