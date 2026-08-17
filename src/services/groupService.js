@@ -74,6 +74,11 @@ export function setActiveGroup(groupCode, groupName = '') {
   const cleanCode = sanitizeGroupTag(groupCode);
   const cleanName = groupName?.trim() || cleanCode;
 
+  // Prevent infinite loops if group code and name haven't changed
+  if (activeGroupCode === cleanCode && activeGroupName === cleanName && filterMode === (cleanCode ? 'group' : 'all')) {
+    return;
+  }
+
   activeGroupCode = cleanCode;
   activeGroupName = cleanName;
   filterMode = cleanCode ? 'group' : 'all';
@@ -135,7 +140,7 @@ export function notifyNewGroupPhoto(photo) {
   const isMember = isMemberNotificationEnabled(photo.groupCode, photo.authorName);
 
   if (isGlobal && isMember) {
-    showToast(`📸 ${photo.authorName || 'Друг'} додав нове фото в групу!`, 'info', 4000);
+    showToast(`📸 ${photo.authorName || 'Друг'} додав нове фото в групу!`, 'info', 3500);
   }
 }
 

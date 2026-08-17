@@ -89,19 +89,28 @@ export function initMap(containerId = 'map') {
 
   mapInstance.on('moveend zoomend', handleMapViewportChange);
 
+  let currentSubscribedGroup = null;
+
   // Setup real-time listener for current group and metadata
   function attachGroupSync(targetGroupCode) {
+    const currentCode = targetGroupCode || getActiveGroupCode();
+
+    if (currentSubscribedGroup === currentCode && groupUnsubscribe && metaUnsubscribe) {
+      return; // Already attached to this group, prevent re-subscribe loop
+    }
+    currentSubscribedGroup = currentCode;
+
     if (groupUnsubscribe) { groupUnsubscribe(); groupUnsubscribe = null; }
     if (metaUnsubscribe) { metaUnsubscribe(); metaUnsubscribe = null; }
-
-    const currentCode = targetGroupCode || getActiveGroupCode();
 
     if (currentCode) {
       // 1. Live photos sync (instant pin add/remove)
       groupUnsubscribe = subscribeToGroupUpdates(
         currentCode,
         (newPhoto) => {
-          if (newPhoto) notifyNewGroupPhoto(newPhoto);
+          if (newPhoto && newPhoto.userId !== getCurrentUserId()) {
+            notifyNewGroupPhoto(newPhoto);
+          }
           renderMapMarkers();
         },
         () => renderMapMarkers()
@@ -112,6 +121,7 @@ export function initMap(containerId = 'map') {
         const currentUserName = getCurrentDisplayName();
 
         if (!meta.exists || meta.isDeleted || meta.status === 'deleted') {
+          currentSubscribedGroup = null;
           clearActiveGroup();
           updateHeaderGroupBadge();
           showToast('Цю групу було видалено адміністратором 🗑️', 'info', 4000);
@@ -122,6 +132,7 @@ export function initMap(containerId = 'map') {
 
         const banned = Array.isArray(meta.bannedMembers) ? meta.bannedMembers : [];
         if (banned.includes(currentUserName)) {
+          currentSubscribedGroup = null;
           clearActiveGroup();
           updateHeaderGroupBadge();
           showToast('Вас було вилучено з цієї групи адміністратором 🚫', 'error', 4000);
@@ -130,7 +141,7 @@ export function initMap(containerId = 'map') {
           return;
         }
 
-        if (meta.name) {
+        if (meta.name && meta.name !== getActiveGroupName()) {
           setActiveGroup(currentCode, meta.name);
           updateHeaderGroupBadge();
         }

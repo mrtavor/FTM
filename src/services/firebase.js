@@ -97,12 +97,14 @@ export async function savePhotoDocument(photoData) {
     lng: photoData.lng,
     geohash: photoData.geohash,
     description: photoData.description || '',
-    emoji: photoData.emoji || 'рџ“ё',
+    emoji: photoData.emoji || '📸',
     mainUrl: photoData.mainUrl,
     thumbUrl: photoData.thumbUrl,
-    authorName: photoData.authorName || 'РњР°РЅРґСЂС–РІРЅРёРє',
+    authorName: photoData.authorName || 'Мандрівник',
     groupCode: photoData.groupCode || null,
     userId: photoData.userId,
+    likes: [],
+    comments: [],
     createdAt: serverTimestamp()
   };
 
@@ -184,11 +186,11 @@ export async function saveGroupMetadata(groupData, isNewCreation = false) {
         if (existingSnap.exists()) {
           const exData = existingSnap.data();
           if (!exData.isDeleted && exData.status !== 'deleted' && exData.ownerId && exData.ownerId !== groupData.ownerId) {
-            throw new Error(`Р“СЂСѓРїР° Р· РєР»СЋС‡РµРј #${tag} РІР¶Рµ С–СЃРЅСѓС”! РџСЂРёС”РґРЅР°Р№С‚РµСЃСЏ РґРѕ РЅРµС— Р°Р±Рѕ РѕР±РµСЂС–С‚СЊ С–РЅС€РёР№ РєР»СЋС‡.`);
+            throw new Error(`Група з ключем #${tag} вже існує! Приєднайтеся до неї або оберіть інший ключ.`);
           }
         }
       } catch (err) {
-        if (err.message && err.message.includes('РІР¶Рµ С–СЃРЅСѓС”')) throw err;
+        if (err.message && err.message.includes('вже існує')) throw err;
       }
     }
 
@@ -196,10 +198,10 @@ export async function saveGroupMetadata(groupData, isNewCreation = false) {
       tag,
       name: groupData.name?.trim() || tag,
       ownerId: groupData.ownerId || '',
-      adminName: groupData.adminName || 'РђРґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ',
+      adminName: groupData.adminName || 'Адміністратор',
       members: [{
         uid: groupData.ownerId || '',
-        name: groupData.adminName || 'РђРґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ',
+        name: groupData.adminName || 'Адміністратор',
         joinedAt: new Date().toISOString()
       }],
       isDeleted: false,
@@ -323,7 +325,7 @@ export async function registerGroupMember(groupCode, memberObj) {
     if (snap.exists()) {
       const data = snap.data();
       const members = Array.isArray(data.members) ? [...data.members] : [];
-      const newName = memberObj.name || 'РЈС‡Р°СЃРЅРёРє';
+      const newName = memberObj.name || 'Учасник';
       const uid = memberObj.uid || '';
 
       // Match by UID first, or name if no UID
@@ -364,7 +366,7 @@ export async function registerGroupMember(groupCode, memberObj) {
  */
 export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName = '', currentUserId = '') {
   const cleanTag = sanitizeGroupTag(groupCode);
-  const membersMap = new Map(); // Key: `uid:${userId}` or `name:${name}`
+  const membersMap = new Map();
 
   const getMemberKey = (uid, name) => {
     if (uid && uid.trim()) return `uid:${uid.trim()}`;
@@ -397,7 +399,7 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
       // Group creator / admin
       if (realOwnerId || groupData.adminName) {
         const isAdminCurrentUser = Boolean(realOwnerId && currentUserId && realOwnerId === currentUserId);
-        const adminDisplayName = isAdminCurrentUser ? currentUserName : (groupData.adminName || 'РђРґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ');
+        const adminDisplayName = isAdminCurrentUser ? currentUserName : (groupData.adminName || 'Адміністратор');
         const adminKey = getMemberKey(realOwnerId, adminDisplayName);
 
         membersMap.set(adminKey, {
@@ -413,7 +415,7 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
       registeredMembers.forEach(m => {
         if (!m) return;
         const isCurrentUser = Boolean(currentUserId && m.uid && m.uid === currentUserId);
-        const displayName = isCurrentUser ? (currentUserName || m.name) : (m.name || 'РЈС‡Р°СЃРЅРёРє');
+        const displayName = isCurrentUser ? (currentUserName || m.name) : (m.name || 'Учасник');
         const isAdm = Boolean(realOwnerId && m.uid && m.uid === realOwnerId);
         const key = getMemberKey(m.uid, displayName);
 
@@ -447,7 +449,7 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
       if (isAdm) existing.isAdmin = true;
     } else {
       membersMap.set(key, {
-        name: currentUserName || 'РњР°РЅРґСЂС–РІРЅРёРє',
+        name: currentUserName || 'Мандрівник',
         count: 0,
         userId: currentUserId || '',
         isAdmin: isAdm
@@ -455,17 +457,16 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
     }
   }
 
-  // 3. Count photos by member (mapping each photo to its corresponding member)
+  // 3. Count photos by member
   try {
     const q = query(collection(db, 'photos'), where('groupCode', '==', cleanTag), limit(150));
     const snapshot = await getDocs(q);
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
       const photoUid = data.userId || '';
-      const photoAuthor = data.authorName || 'РЈС‡Р°СЃРЅРёРє';
+      const photoAuthor = data.authorName || 'Учасник';
       const isAdm = Boolean(realOwnerId && photoUid && photoUid === realOwnerId);
 
-      // Match by UID first, then by name
       let targetKey = null;
       if (photoUid && membersMap.has(`uid:${photoUid}`)) {
         targetKey = `uid:${photoUid}`;
@@ -528,9 +529,12 @@ export function subscribeToGroupUpdates(groupCode, onNewPhoto, onPhotoRemoved) {
 
       snapshot.docChanges().forEach((change) => {
         const photo = { id: change.doc.id, ...change.doc.data() };
-        if (change.type === 'added' || change.type === 'modified') {
+        if (change.type === 'added') {
           geoService.addPhotosToCache([photo]);
           if (typeof onNewPhoto === 'function') onNewPhoto(photo);
+        } else if (change.type === 'modified') {
+          geoService.addPhotosToCache([photo]);
+          if (typeof onNewPhoto === 'function') onNewPhoto(null);
         } else if (change.type === 'removed') {
           geoService.cache.delete(change.doc.id);
           if (typeof onPhotoRemoved === 'function') onPhotoRemoved(change.doc.id);
