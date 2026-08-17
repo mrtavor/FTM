@@ -193,11 +193,43 @@ export async function fetchGroupMetadata(tag) {
 }
 
 /**
+ * Delete a Group (Admin Only)
+ */
+export async function deleteGroup(tag) {
+  if (!db || !tag) return;
+  const cleanTag = tag.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  const groupRef = doc(db, 'groups', cleanTag);
+  await deleteDoc(groupRef);
+  return true;
+}
+
+/**
+ * Kick a member from Group by adding to banned list
+ */
+export async function kickMemberFromGroup(groupTag, memberName) {
+  if (!db || !groupTag || !memberName) return;
+  const cleanTag = groupTag.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  const groupRef = doc(db, 'groups', cleanTag);
+  const snap = await getDoc(groupRef);
+  
+  if (snap.exists()) {
+    const data = snap.data();
+    const banned = Array.isArray(data.bannedMembers) ? data.bannedMembers : [];
+    if (!banned.includes(memberName)) {
+      banned.push(memberName);
+      await setDoc(groupRef, { bannedMembers: banned }, { merge: true });
+    }
+  }
+  return true;
+}
+
+/**
  * Fetch list of active members in a group with photo counts
  * @param {string} groupCode 
- * @returns {Promise<Array<{name: string, count: number}>>}
+ * @param {string} ownerId
+ * @returns {Promise<Array<{name: string, count: number, userId: string, isAdmin: boolean}>>}
  */
-export async function fetchGroupMembers(groupCode) {
+export async function fetchGroupMembers(groupCode, ownerId = '') {
   if (!db || !groupCode) return [];
   try {
     const q = query(collection(db, 'photos'), where('groupCode', '==', groupCode), limit(100));
@@ -207,8 +239,17 @@ export async function fetchGroupMembers(groupCode) {
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
       const name = data.authorName || 'Учасник';
-      const current = membersMap.get(name) || { name, count: 0 };
+      const userId = data.userId || '';
+      const current = membersMap.get(name) || {
+        name,
+        count: 0,
+        userId,
+        isAdmin: Boolean(ownerId && userId === ownerId)
+      };
       current.count += 1;
+      if (ownerId && userId === ownerId) {
+        current.isAdmin = true;
+      }
       membersMap.set(name, current);
     });
 
