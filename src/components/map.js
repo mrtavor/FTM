@@ -41,22 +41,41 @@ export function initMap(containerId = 'map') {
     zoomControl: false
   });
 
-  // Bulletproof direct click delegation in capture phase for PC & Mobile
+  // --- Bulletproof Pin Click Detection (pointerdown + pointerup) ---
+  // Leaflet on PC consumes 'click' events via its drag detection.
+  // We bypass this by tracking pointerdown and pointerup ourselves.
   const mapContainer = document.getElementById(containerId);
   if (mapContainer && !mapContainer._hasPhotoClickListener) {
     mapContainer._hasPhotoClickListener = true;
-    mapContainer.addEventListener('click', (e) => {
-      const pin = e.target.closest('[data-photo-id]');
-      if (pin) {
-        const photoId = pin.getAttribute('data-photo-id');
-        const photo = geoService.cache.get(photoId);
-        if (photo) {
-          e.preventDefault();
-          e.stopPropagation();
-          showPhotoViewer(photo, () => renderMapMarkers());
+
+    let downX = 0;
+    let downY = 0;
+    let downTarget = null;
+
+    mapContainer.addEventListener('pointerdown', (e) => {
+      downX = e.clientX;
+      downY = e.clientY;
+      downTarget = e.target.closest('[data-photo-id]');
+    }, { capture: true, passive: true });
+
+    mapContainer.addEventListener('pointerup', (e) => {
+      const dx = Math.abs(e.clientX - downX);
+      const dy = Math.abs(e.clientY - downY);
+      // Only treat as click if pointer barely moved (< 8px) — not a drag
+      if (dx < 8 && dy < 8 && downTarget) {
+        const pin = e.target.closest('[data-photo-id]') || downTarget;
+        if (pin) {
+          const photoId = pin.getAttribute('data-photo-id');
+          const photo = geoService.cache.get(photoId);
+          if (photo) {
+            e.preventDefault();
+            e.stopPropagation();
+            showPhotoViewer(photo, () => renderMapMarkers());
+          }
         }
       }
-    }, true);
+      downTarget = null;
+    }, { capture: true });
   }
 
   // Fast Eye-Care CartoDB Voyager TileLayer with pre-buffering
