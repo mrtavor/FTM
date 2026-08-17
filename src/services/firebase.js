@@ -154,7 +154,43 @@ export async function fetchPhotosForGeohashes(geohashes) {
   return results;
 }
 
-import { onSnapshot } from 'firebase/firestore';
+import { onSnapshot, getDoc } from 'firebase/firestore';
+
+/**
+ * Save or create Group metadata (Name + Tag)
+ */
+export async function saveGroupMetadata(groupData) {
+  if (!db || !groupData.tag) return;
+  const tag = groupData.tag.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  const groupRef = doc(db, 'groups', tag);
+  const payload = {
+    tag: tag,
+    name: groupData.name?.trim() || tag,
+    ownerId: groupData.ownerId || '',
+    updatedAt: serverTimestamp(),
+    createdAt: serverTimestamp()
+  };
+  await setDoc(groupRef, payload, { merge: true });
+  return payload;
+}
+
+/**
+ * Fetch Group metadata by Tag
+ */
+export async function fetchGroupMetadata(tag) {
+  if (!db || !tag) return null;
+  try {
+    const cleanTag = tag.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    const groupRef = doc(db, 'groups', cleanTag);
+    const snap = await getDoc(groupRef);
+    if (snap.exists()) {
+      return snap.data();
+    }
+  } catch (err) {
+    console.warn('Error fetching group metadata:', err);
+  }
+  return null;
+}
 
 /**
  * Fetch list of active members in a group with photo counts

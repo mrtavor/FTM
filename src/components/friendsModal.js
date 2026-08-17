@@ -1,9 +1,14 @@
 /**
- * Friends Circle, Group Members & Notification Manager
+ * Friends Circle, Group Management & Settings Modal
+ * Supports:
+ * - Setting and renaming Group Title
+ * - Setting and editing Group Key / Tag
+ * - Member List & Notification switches
  */
 import {
   getActiveGroupCode,
-  setActiveGroupCode,
+  getActiveGroupName,
+  setActiveGroup,
   clearActiveGroup,
   getFilterMode,
   setFilterMode,
@@ -13,10 +18,12 @@ import {
   isMemberNotificationEnabled,
   setMemberNotificationEnabled
 } from '../services/groupService.js';
-import { isGoogleUser, loginWithGoogle } from '../services/authService.js';
-import { fetchGroupMembers } from '../services/firebase.js';
+import { isGoogleUser, loginWithGoogle, getCurrentUserId } from '../services/authService.js';
+import { fetchGroupMembers, saveGroupMetadata, fetchGroupMetadata } from '../services/firebase.js';
 import { renderMapMarkers } from './map.js';
 import { showToast } from '../utils/toast.js';
+
+let isEditingSettings = false;
 
 export async function openFriendsModal() {
   const container = document.getElementById('modal-container');
@@ -24,10 +31,18 @@ export async function openFriendsModal() {
 
   const isGoogle = isGoogleUser();
   const activeGroup = getActiveGroupCode();
+  let groupName = getActiveGroupName();
   const filterMode = getFilterMode();
   const isGlobalNotify = isGroupNotificationEnabled(activeGroup);
 
-  // Fetch group members if active
+  // Fetch group metadata from Firestore if available
+  if (isGoogle && activeGroup) {
+    const meta = await fetchGroupMetadata(activeGroup);
+    if (meta && meta.name) {
+      groupName = meta.name;
+    }
+  }
+
   let members = [];
   if (isGoogle && activeGroup) {
     members = await fetchGroupMembers(activeGroup);
@@ -49,7 +64,7 @@ export async function openFriendsModal() {
                 Потрібен вхід через Google
               </h4>
               <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
-                Щоб створювати спільні групи з друзями, отримувати сповіщення та безпечно обмінюватися фото, будь ласка, увійдіть через Google.
+                Щоб створювати спільні групи з друзями, отримувати сповіщення та обмінюватися фото, будь ласка, увійдіть через Google.
               </p>
 
               <button type="button" id="btn-modal-google-auth" class="btn-primary" style="width: 100%; padding: 12px; background: #FFFFFF; color: #3c4043; border: 1px solid #dadce0; box-shadow: 0 1px 3px rgba(60,64,67,.08); font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 14px;">
@@ -58,53 +73,60 @@ export async function openFriendsModal() {
               </button>
             </div>
           ` : `
-            <!-- Active Group Status Card -->
-            <div style="background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-md);">
-              <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">
-                Ваша активна група:
-              </div>
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px;">
-                <span style="font-size: 18px; font-weight: 800; color: var(--accent-primary);">
-                  ${activeGroup ? `👥 ${activeGroup}` : '🌍 Загальна карта'}
-                </span>
-                ${activeGroup ? `
-                  <button class="btn-danger" id="btn-leave-group" style="padding: 4px 10px; font-size: 11px;">
-                    Вийти
-                  </button>
-                ` : ''}
-              </div>
+            ${activeGroup ? `
+              <!-- Active Group Header & Settings Toggle -->
+              <div style="background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-md);">
+                <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+                  <div>
+                    <div style="font-size: 18px; font-weight: 800; color: var(--accent-primary); line-height: 1.2;">
+                      ${groupName}
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                      Ключ-тег: <code style="font-weight: 700; color: var(--accent-terracotta);">#${activeGroup}</code>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 6px;">
+                    <button id="btn-toggle-group-settings" class="btn-icon" style="width: 32px; height: 32px; font-size: 14px;" title="Змінити назву чи ключ групи">
+                      ⚙️
+                    </button>
+                    <button id="btn-leave-group" class="btn-danger" style="padding: 4px 8px; font-size: 11px;">
+                      Вийти
+                    </button>
+                  </div>
+                </div>
 
-              ${activeGroup ? `
-                <div style="margin-top: 10px; display: flex; gap: 6px;">
-                  <button class="btn-primary" id="btn-copy-group-link" style="flex: 1; font-size: 13px; padding: 9px 14px;">
-                    🔗 Надіслати запрошення друзям
+                <!-- Group Edit Settings Block (Toggled by ⚙️) -->
+                <div id="group-edit-block" style="display: ${isEditingSettings ? 'block' : 'none'}; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                  <div style="font-size: 12px; font-weight: 700; margin-bottom: 8px;">⚙️ Налаштування групи:</div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div>
+                      <label class="form-label" style="font-size: 11px;">Назва групи:</label>
+                      <input type="text" id="edit-group-name" class="form-input-text" value="${groupName}" maxlength="50" placeholder="Наприклад: Подорож у гори 🌲" />
+                    </div>
+                    <div>
+                      <label class="form-label" style="font-size: 11px;">Ключ / Тег групи:</label>
+                      <input type="text" id="edit-group-tag" class="form-input-text" value="${activeGroup}" maxlength="30" placeholder="KARPATY2026" />
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px;">
+                      <button id="btn-cancel-group-edit" class="btn-secondary" style="font-size: 12px; padding: 6px 12px;">Скасувати</button>
+                      <button id="btn-save-group-edit" class="btn-primary" style="font-size: 12px; padding: 6px 12px;">Зберегти зміни</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Share Button -->
+                <div style="margin-top: 12px;">
+                  <button class="btn-primary" id="btn-copy-group-link" style="width: 100%; font-size: 13px; padding: 9px 14px;">
+                    🔗 Скопіювати посилання для друзів
                   </button>
                 </div>
-              ` : ''}
-            </div>
-
-            <!-- Join or Create Group -->
-            <div style="border: 1px solid var(--border-color); padding: 14px; border-radius: var(--radius-md);">
-              <label class="form-label" style="font-size: 13px; margin-bottom: 4px;">Створити або зайти в групу:</label>
-              <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4; margin-bottom: 10px;">
-                Введіть будь-яке слово (наприклад, <code>ДРУЗІ</code> або <code>КАРПАТИ</code>).
-              </p>
-
-              <div style="display: flex; gap: 8px;">
-                <input type="text" id="input-new-group-code" class="form-input-text" placeholder="Код групи" value="${activeGroup || ''}" maxlength="30" />
-                <button class="btn-primary" id="btn-join-group" style="white-space: nowrap; font-size: 13px;">
-                  Зайти
-                </button>
               </div>
-            </div>
 
-            <!-- Group Notifications & Members Section -->
-            ${activeGroup ? `
-              <!-- Global Notification Toggle -->
+              <!-- Group Notifications Toggle -->
               <div style="background: var(--bg-surface); border: 1px solid var(--border-color); padding: 12px 14px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: space-between;">
                 <div>
                   <div style="font-weight: 700; font-size: 13px; color: var(--text-main);">🔔 Сповіщення групи</div>
-                  <div style="font-size: 11px; color: var(--text-muted);">Сповіщати, коли хтось викладає фото</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Сповіщати про нові фото від усіх</div>
                 </div>
                 <label class="switch-toggle">
                   <input type="checkbox" id="toggle-global-notify" ${isGlobalNotify ? 'checked' : ''} />
@@ -141,7 +163,7 @@ export async function openFriendsModal() {
                   </div>
                 ` : `
                   <div style="font-size: 12px; color: var(--text-muted); padding: 6px 0;">
-                    Ще немає доданих фото у цій групі. Опублікуйте перше!
+                    Ще немає доданих фото. Опублікуйте перше!
                   </div>
                 `}
               </div>
@@ -151,14 +173,51 @@ export async function openFriendsModal() {
                 <label class="form-label" style="font-size: 12px; margin-bottom: 6px;">Режим карти:</label>
                 <div style="display: flex; gap: 8px;">
                   <button id="btn-filter-group-only" class="btn-secondary" style="flex: 1; font-size: 12px; padding: 8px 0; ${filterMode === 'group' ? 'background: var(--accent-primary); color: #fff;' : ''}">
-                    👥 Тільки ${activeGroup}
+                    👥 Тільки ця група
                   </button>
                   <button id="btn-filter-all" class="btn-secondary" style="flex: 1; font-size: 12px; padding: 8px 0; ${filterMode === 'all' ? 'background: var(--accent-primary); color: #fff;' : ''}">
                     🌍 Всі фото
                   </button>
                 </div>
               </div>
-            ` : ''}
+            ` : `
+              <!-- Creation & Join Form (When no active group) -->
+              <div style="display: flex; flex-direction: column; gap: 14px;">
+                <!-- 1. Create New Group -->
+                <div style="border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md);">
+                  <span style="font-weight: 700; font-size: 14px; display: block; margin-bottom: 4px;">➕ Створити нову групу:</span>
+                  <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                    <div>
+                      <label class="form-label" style="font-size: 11px;">Назва групи:</label>
+                      <input type="text" id="create-group-name" class="form-input-text" placeholder="Наприклад: Подорож у гори 🌲" maxlength="50" />
+                    </div>
+                    <div>
+                      <label class="form-label" style="font-size: 11px;">Ключ / Тег групи:</label>
+                      <div style="display: flex; gap: 6px;">
+                        <input type="text" id="create-group-tag" class="form-input-text" placeholder="KARPATY2026" maxlength="30" />
+                        <button type="button" id="btn-gen-tag" class="btn-secondary" style="white-space: nowrap; font-size: 12px; padding: 0 10px;" title="Згенерувати випадковий ключ">
+                          🎲 Тег
+                        </button>
+                      </div>
+                    </div>
+                    <button class="btn-primary" id="btn-submit-create-group" style="margin-top: 4px; font-size: 13px;">
+                      Створити групу
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 2. Join by Tag -->
+                <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-md);">
+                  <span style="font-weight: 700; font-size: 14px; display: block; margin-bottom: 4px;">🔍 Зайти в існуючу групу за тегом:</span>
+                  <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <input type="text" id="input-join-tag" class="form-input-text" placeholder="Введіть тег або ключ групи" maxlength="30" />
+                    <button class="btn-primary" id="btn-submit-join-tag" style="white-space: nowrap; font-size: 13px;">
+                      Зайти
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `}
           `}
         </div>
 
@@ -177,15 +236,28 @@ function attachFriendsEvents() {
   const btnClose = document.getElementById('btn-close-friends');
   const btnCloseFooter = document.getElementById('btn-close-friends-footer');
   const btnGoogleAuth = document.getElementById('btn-modal-google-auth');
-  const btnJoin = document.getElementById('btn-join-group');
-  const inputCode = document.getElementById('input-new-group-code');
+
+  // Active group controls
+  const btnToggleEdit = document.getElementById('btn-toggle-group-settings');
+  const editBlock = document.getElementById('group-edit-block');
+  const btnSaveEdit = document.getElementById('btn-save-group-edit');
+  const btnCancelEdit = document.getElementById('btn-cancel-group-edit');
   const btnCopyLink = document.getElementById('btn-copy-group-link');
   const btnLeave = document.getElementById('btn-leave-group');
+  const toggleGlobal = document.getElementById('toggle-global-notify');
   const btnFilterGroup = document.getElementById('btn-filter-group-only');
   const btnFilterAll = document.getElementById('btn-filter-all');
-  const toggleGlobal = document.getElementById('toggle-global-notify');
+
+  // Create & Join controls
+  const btnSubmitCreate = document.getElementById('btn-submit-create-group');
+  const inputCreateName = document.getElementById('create-group-name');
+  const inputCreateTag = document.getElementById('create-group-tag');
+  const btnGenTag = document.getElementById('btn-gen-tag');
+  const inputJoinTag = document.getElementById('input-join-tag');
+  const btnSubmitJoin = document.getElementById('btn-submit-join-tag');
 
   const close = () => {
+    isEditingSettings = false;
     if (backdrop) backdrop.remove();
   };
 
@@ -207,7 +279,100 @@ function attachFriendsEvents() {
     };
   }
 
-  // Global Notification Toggle
+  // Create Group
+  if (btnSubmitCreate && inputCreateTag) {
+    btnSubmitCreate.onclick = async () => {
+      const tagVal = inputCreateTag.value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      const nameVal = inputCreateName ? inputCreateName.value.trim() || tagVal : tagVal;
+
+      if (!tagVal) {
+        showToast('Введіть ключ/тег групи', 'error');
+        return;
+      }
+
+      await saveGroupMetadata({
+        tag: tagVal,
+        name: nameVal,
+        ownerId: getCurrentUserId()
+      });
+
+      setActiveGroup(tagVal, nameVal);
+      showToast(`Групу "${nameVal}" створено! 🎉`, 'success');
+      renderMapMarkers();
+      updateHeaderGroupBadge();
+      openFriendsModal();
+    };
+  }
+
+  // Generate random tag
+  if (btnGenTag && inputCreateTag) {
+    btnGenTag.onclick = () => {
+      inputCreateTag.value = 'GROUP-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    };
+  }
+
+  // Join by Tag
+  if (btnSubmitJoin && inputJoinTag) {
+    btnSubmitJoin.onclick = async () => {
+      const tagVal = inputJoinTag.value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      if (!tagVal) {
+        showToast('Введіть ключ групи', 'error');
+        return;
+      }
+
+      const meta = await fetchGroupMetadata(tagVal);
+      const name = meta ? meta.name : tagVal;
+
+      setActiveGroup(tagVal, name);
+      showToast(`Ви приєдналися до групи "${name}" 👥`, 'success');
+      renderMapMarkers();
+      updateHeaderGroupBadge();
+      openFriendsModal();
+    };
+  }
+
+  // Toggle group settings edit
+  if (btnToggleEdit && editBlock) {
+    btnToggleEdit.onclick = () => {
+      isEditingSettings = !isEditingSettings;
+      editBlock.style.display = isEditingSettings ? 'block' : 'none';
+    };
+  }
+
+  if (btnCancelEdit && editBlock) {
+    btnCancelEdit.onclick = () => {
+      isEditingSettings = false;
+      editBlock.style.display = 'none';
+    };
+  }
+
+  // Save edited group name / tag
+  if (btnSaveEdit) {
+    btnSaveEdit.onclick = async () => {
+      const newName = document.getElementById('edit-group-name').value.trim();
+      const newTag = document.getElementById('edit-group-tag').value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+
+      if (!newTag) {
+        showToast('Ключ групи не може бути порожнім', 'error');
+        return;
+      }
+
+      await saveGroupMetadata({
+        tag: newTag,
+        name: newName || newTag,
+        ownerId: getCurrentUserId()
+      });
+
+      setActiveGroup(newTag, newName || newTag);
+      isEditingSettings = false;
+      showToast('Налаштування групи збережено! ✨', 'success');
+      renderMapMarkers();
+      updateHeaderGroupBadge();
+      openFriendsModal();
+    };
+  }
+
+  // Global Notification toggle
   if (toggleGlobal) {
     toggleGlobal.onchange = () => {
       const active = getActiveGroupCode();
@@ -216,7 +381,7 @@ function attachFriendsEvents() {
     };
   }
 
-  // Individual Member Notification Buttons
+  // Member notification toggle
   document.querySelectorAll('.btn-member-notify').forEach((btn) => {
     btn.onclick = () => {
       const memberName = btn.dataset.name;
@@ -243,21 +408,7 @@ function attachFriendsEvents() {
     };
   });
 
-  if (btnJoin && inputCode) {
-    btnJoin.onclick = () => {
-      const code = inputCode.value.trim().toUpperCase();
-      if (!code) {
-        showToast('Введіть назву групи', 'error');
-        return;
-      }
-      setActiveGroupCode(code);
-      showToast(`Групу "${code}" підключено! 👥`, 'success');
-      renderMapMarkers();
-      updateHeaderGroupBadge();
-      close();
-    };
-  }
-
+  // Copy link
   if (btnCopyLink) {
     btnCopyLink.onclick = () => {
       const active = getActiveGroupCode();
@@ -270,16 +421,19 @@ function attachFriendsEvents() {
     };
   }
 
+  // Leave group
   if (btnLeave) {
     btnLeave.onclick = () => {
       clearActiveGroup();
+      isEditingSettings = false;
       showToast('Ви вийшли з групи', 'info');
       renderMapMarkers();
       updateHeaderGroupBadge();
-      close();
+      openFriendsModal();
     };
   }
 
+  // Filter mode
   if (btnFilterGroup) {
     btnFilterGroup.onclick = () => {
       setFilterMode('group');
@@ -303,9 +457,10 @@ export function updateHeaderGroupBadge() {
   const badge = document.getElementById('header-group-badge');
   if (!badge) return;
   const active = getActiveGroupCode();
+  const name = getActiveGroupName();
   if (active) {
     badge.style.display = 'inline-flex';
-    badge.querySelector('.btn-text').textContent = active;
+    badge.querySelector('.btn-text').textContent = name;
   } else {
     badge.style.display = 'none';
   }

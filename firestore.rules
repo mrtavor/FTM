@@ -2,12 +2,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Колекція груп друзів
+    match /groups/{groupTag} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.tag is string
+        && request.resource.data.tag.size() <= 50;
+      allow update, delete: if request.auth != null;
+    }
+
     // Колекція фотографій на карті
     match /photos/{photoId} {
-      // Публічне читання
       allow read: if true;
       
-      // Створення дозволено автентифікованим користувачам
       allow create: if request.auth != null
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.description is string
@@ -26,7 +35,6 @@ service cloud.firestore {
         && (request.resource.data.groupCode == null || (request.resource.data.groupCode is string && request.resource.data.groupCode.size() <= 50))
         && request.resource.data.createdAt != null;
         
-      // Оновлення або видалення — тільки автором фото
       allow update, delete: if request.auth != null 
         && resource.data.userId == request.auth.uid;
     }
