@@ -1,6 +1,9 @@
 /**
  * Photo Detail Modal Component
- * Displays full photo view, description, coordinates and deletion option
+ * Displays photo, author, description, and group badge with maximum privacy:
+ * - NO raw coordinates exposed
+ * - NO Google Maps route links
+ * - Robust date formatting
  */
 import { getCurrentUserId } from '../services/authService.js';
 import { deletePhoto } from '../services/firebase.js';
@@ -13,7 +16,7 @@ export function openPhotoDetailModal(photo) {
 
   const currentUserId = getCurrentUserId();
   const isOwner = photo.userId === currentUserId || !photo.userId;
-  const formattedDate = photo.createdAt ? formatPhotoDate(photo.createdAt) : 'Нещодавно';
+  const formattedDate = formatPhotoDate(photo.createdAt);
 
   container.innerHTML = `
     <div class="modal-backdrop" id="detail-modal-backdrop">
@@ -22,8 +25,10 @@ export function openPhotoDetailModal(photo) {
           <div class="photo-detail-emoji-desc">
             <span class="photo-detail-emoji">${photo.emoji || '📸'}</span>
             <div style="display: flex; flex-direction: column;">
-              <span style="font-weight: 700; font-size: 15px;">Деталі локації</span>
-              <span style="font-size: 11px; color: var(--text-muted);">${photo.lat.toFixed(4)}, ${photo.lng.toFixed(4)}</span>
+              <span style="font-weight: 700; font-size: 15px;">Фотографія на карті</span>
+              <span style="font-size: 11px; color: var(--text-muted);">
+                ${photo.groupCode ? `👥 Група: <strong>${photo.groupCode}</strong>` : '🌍 Публічна мітка'}
+              </span>
             </div>
           </div>
           <button class="modal-close-btn" id="btn-close-detail" aria-label="Закрити">&times;</button>
@@ -31,16 +36,15 @@ export function openPhotoDetailModal(photo) {
 
         <div class="modal-body">
           <div class="photo-detail-image-box">
-            <img class="photo-detail-full-img" src="${photo.mainUrl || photo.thumbUrl}" alt="${photo.description || 'Фото локації'}" />
+            <img class="photo-detail-full-img" src="${photo.mainUrl || photo.thumbUrl}" alt="${photo.description || 'Фото'}" />
           </div>
 
           <div class="photo-detail-meta">
             <div class="photo-detail-desc">${photo.description || 'Без опису'}</div>
             
             <div class="photo-detail-info-row">
-              <span>👤 ${photo.authorName || 'Мандрівник'}</span>
+              <span>👤 Автор: <strong>${photo.authorName || 'Мандрівник'}</strong></span>
               <span>📅 ${formattedDate}</span>
-              <span>📍 <a href="https://www.google.com/maps?q=${photo.lat},${photo.lng}" target="_blank" rel="noopener" style="color: var(--accent-terracotta); text-decoration: none;">Google Maps ↗</a></span>
             </div>
           </div>
         </div>
@@ -80,7 +84,7 @@ function attachDetailModalEvents(photo) {
 
   if (btnDelete) {
     btnDelete.onclick = async () => {
-      if (confirm('Ви впевнені, що хочете видалити цю гео-мітку з карти?')) {
+      if (confirm('Видалити цю фотографію з карти?')) {
         try {
           await deletePhoto(photo);
           showToast('Фото видалено з карти', 'info');
@@ -95,17 +99,38 @@ function attachDetailModalEvents(photo) {
   }
 }
 
+/**
+ * Robust date formatting that never outputs 'Invalid Date'
+ */
 function formatPhotoDate(dateVal) {
+  if (!dateVal) return 'Нещодавно';
+
   try {
-    if (typeof dateVal === 'object' && dateVal.seconds) {
-      return new Date(dateVal.seconds * 1000).toLocaleDateString('uk-UA', {
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+    let dateObj = null;
+
+    // 1. Firestore Timestamp object with .toDate() or .seconds
+    if (typeof dateVal === 'object') {
+      if (typeof dateVal.toDate === 'function') {
+        dateObj = dateVal.toDate();
+      } else if (typeof dateVal.seconds === 'number') {
+        dateObj = new Date(dateVal.seconds * 1000);
+      } else if (dateVal._seconds) {
+        dateObj = new Date(dateVal._seconds * 1000);
+      }
+    } else if (typeof dateVal === 'number') {
+      dateObj = new Date(dateVal);
+    } else if (typeof dateVal === 'string') {
+      const parsed = Date.parse(dateVal);
+      if (!isNaN(parsed)) {
+        dateObj = new Date(parsed);
+      }
     }
-    return new Date(dateVal).toLocaleDateString('uk-UA', {
+
+    if (!dateObj || isNaN(dateObj.getTime())) {
+      return 'Нещодавно';
+    }
+
+    return dateObj.toLocaleDateString('uk-UA', {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',

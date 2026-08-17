@@ -4,11 +4,10 @@ service cloud.firestore {
     
     // Колекція фотографій на карті
     match /photos/{photoId} {
-      // Публічне читання для всіх відвідувачів
+      // Публічне читання
       allow read: if true;
       
-      // Створення дозволено лише автентифікованим користувачам
-      // з суворою валідацією полів та структури документу
+      // Створення дозволено автентифікованим користувачам
       allow create: if request.auth != null
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.description is string
@@ -24,6 +23,7 @@ service cloud.firestore {
         && request.resource.data.mainUrl is string
         && request.resource.data.thumbUrl is string
         && (request.resource.data.authorName == null || (request.resource.data.authorName is string && request.resource.data.authorName.size() <= 60))
+        && (request.resource.data.groupCode == null || (request.resource.data.groupCode is string && request.resource.data.groupCode.size() <= 50))
         && request.resource.data.createdAt != null;
         
       // Оновлення або видалення — тільки автором фото
@@ -31,7 +31,6 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid;
     }
     
-    // Заборона запису у всі інші колекції
     match /{document=**} {
       allow read, write: if false;
     }

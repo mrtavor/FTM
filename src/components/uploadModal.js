@@ -3,12 +3,13 @@
  * 100% Client-side flow:
  * 1. File pick -> EXIF extraction (exifr)
  * 2. Canvas compression & thumbnail generation + EXIF stripping
- * 3. Emoji selection & Description
+ * 3. Group/Circle selection & Emoji selection & Description
  * 4. Geohash encoding & Firebase upload
  */
 import { extractExifGps, processImageClientSide, formatBytes } from '../services/imageProcessor.js';
 import { uploadPhotoBlobs, savePhotoDocument } from '../services/firebase.js';
 import { getCurrentUserId, getCurrentDisplayName, ensureAuthenticatedUser } from '../services/authService.js';
+import { getActiveGroupCode } from '../services/groupService.js';
 import { geoService } from '../services/geoService.js';
 import { startManualLocationPicker, renderMapMarkers, flyToCoords } from './map.js';
 import { showToast } from '../utils/toast.js';
@@ -27,6 +28,8 @@ export function openUploadModal() {
   const container = document.getElementById('modal-container');
   if (!container) return;
 
+  const currentGroup = getActiveGroupCode();
+
   container.innerHTML = `
     <div class="modal-backdrop" id="upload-modal-backdrop">
       <div class="modal-window">
@@ -41,7 +44,7 @@ export function openUploadModal() {
             <input type="file" id="file-input" class="file-input-hidden" accept="image/jpeg,image/png,image/webp,image/heic" />
             <div class="dropzone-icon">📷</div>
             <div class="dropzone-title">Оберіть фото або перетягніть сюди</div>
-            <div class="dropzone-subtitle">JPG, PNG, WebP • GPS витягується автоматично</div>
+            <div class="dropzone-subtitle">JPG, PNG, WebP • Гео-точка визначається автоматично</div>
           </div>
 
           <!-- Step 2: Preview Card (Hidden initially) -->
@@ -57,6 +60,19 @@ export function openUploadModal() {
           <!-- GPS Status & Location Picker -->
           <div id="gps-status-box" style="display: none;">
             <!-- Rendered dynamically -->
+          </div>
+
+          <!-- Group / Privacy Circle Selector -->
+          <div id="group-selector-box" style="display: none; background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm);">
+            <label class="form-label" style="font-size: 12px; margin-bottom: 4px;">👥 Видимість для друзів / групи:</label>
+            <div style="display: flex; gap: 8px;">
+              <select id="select-photo-group" class="form-input-text" style="padding: 8px 12px; font-size: 13px;">
+                <option value="" ${!currentGroup ? 'selected' : ''}>🌍 Публічно на загальній карті</option>
+                ${currentGroup ? `<option value="${currentGroup}" selected>👥 Тільки для групи "${currentGroup}"</option>` : ''}
+                <option value="__custom__">➕ Вказати інший код групи...</option>
+              </select>
+            </div>
+            <input type="text" id="input-custom-group" class="form-input-text" placeholder="Введіть секретний код групи (наприклад: DRUZI2026)" style="display: none; margin-top: 6px; font-size: 12px;" />
           </div>
 
           <!-- Emoji Picker -->
@@ -89,7 +105,7 @@ export function openUploadModal() {
           <!-- Upload Progress Area -->
           <div id="upload-progress-box" style="display: none;">
             <div style="font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between;">
-              <span id="upload-status-text">Клієнтська оптимізація...</span>
+              <span id="upload-status-text">Оптимізація...</span>
               <span id="upload-percent-text">0%</span>
             </div>
             <div class="progress-bar-container">
@@ -123,8 +139,20 @@ function attachUploadModalEvents() {
   const btnRemove = document.getElementById('btn-remove-selected-photo');
   const emojiGrid = document.getElementById('emoji-grid-container');
   const btnSubmit = document.getElementById('btn-submit-upload');
+  const selectGroup = document.getElementById('select-photo-group');
+  const inputCustomGroup = document.getElementById('input-custom-group');
 
-  // Close handlers
+  if (selectGroup && inputCustomGroup) {
+    selectGroup.onchange = () => {
+      if (selectGroup.value === '__custom__') {
+        inputCustomGroup.style.display = 'block';
+        inputCustomGroup.focus();
+      } else {
+        inputCustomGroup.style.display = 'none';
+      }
+    };
+  }
+
   const close = () => {
     resetUploadState();
     if (backdrop) backdrop.remove();
@@ -170,6 +198,7 @@ function attachUploadModalEvents() {
     document.getElementById('dropzone-area').style.display = 'flex';
     document.getElementById('preview-area').style.display = 'none';
     document.getElementById('gps-status-box').style.display = 'none';
+    document.getElementById('group-selector-box').style.display = 'none';
     document.getElementById('emoji-picker-group').style.display = 'none';
     document.getElementById('description-group').style.display = 'none';
     btnSubmit.disabled = true;
@@ -200,7 +229,7 @@ async function handleFileSelected(file) {
   }
 
   currentFile = file;
-  showToast('Обробка фото та пошук GPS...', 'info', 1500);
+  showToast('Обробка фото та пошук гео-точки...', 'info', 1500);
 
   // 1. Extract EXIF GPS
   const gps = await extractExifGps(file);
@@ -225,6 +254,7 @@ async function handleFileSelected(file) {
   const badgeSave = document.getElementById('badge-size-save');
   const badgeDim = document.getElementById('badge-dimensions');
   const gpsBox = document.getElementById('gps-status-box');
+  const groupBox = document.getElementById('group-selector-box');
   const emojiGroup = document.getElementById('emoji-picker-group');
   const descGroup = document.getElementById('description-group');
   const btnSubmit = document.getElementById('btn-submit-upload');
@@ -238,15 +268,15 @@ async function handleFileSelected(file) {
   badgeDim.textContent = `${processedData.width}×${processedData.height}px`;
 
   renderGpsStatusBox(gpsBox);
+  groupBox.style.display = 'block';
   emojiGroup.style.display = 'block';
   descGroup.style.display = 'block';
 
-  // Enable button only if coordinates are valid
   btnSubmit.disabled = !currentCoords;
 }
 
 /**
- * Render GPS Status Info & Actions
+ * Render GPS Status Info & Actions (Privacy-focused: no raw coordinates shown)
  */
 function renderGpsStatusBox(container) {
   container.style.display = 'block';
@@ -255,16 +285,16 @@ function renderGpsStatusBox(container) {
     container.innerHTML = `
       <div class="gps-status-card gps-found">
         <div>
-          <strong>✓ GPS знайдено:</strong> ${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}
+          <strong>✓ Гео-місцеположення визначено</strong>
         </div>
-        <button id="btn-change-pin" class="btn-icon-pill" style="font-size: 11px;">Змінити</button>
+        <button id="btn-change-pin" class="btn-icon-pill" style="font-size: 11px;">Змінити точку</button>
       </div>
     `;
     document.getElementById('btn-change-pin').onclick = startManualPinMode;
   } else {
     container.innerHTML = `
       <div class="gps-status-card gps-missing">
-        <div><strong>⚠️ GPS відсутній у метаданих фото</strong></div>
+        <div><strong>⚠️ Гео-точка відсутня у метаданих фото</strong></div>
         <div style="display: flex; gap: 6px; margin-top: 6px;">
           <button id="btn-pick-map" class="btn-primary" style="padding: 6px 12px; font-size: 12px;">📍 Вказати на карті</button>
           <button id="btn-use-geo" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">🧭 Моя геолокація</button>
@@ -277,12 +307,9 @@ function renderGpsStatusBox(container) {
   }
 }
 
-/**
- * Switch to interactive map location picker
- */
 function startManualPinMode() {
   const backdrop = document.getElementById('upload-modal-backdrop');
-  if (backdrop) backdrop.style.display = 'none'; // Temporarily hide modal
+  if (backdrop) backdrop.style.display = 'none';
 
   startManualLocationPicker((coords) => {
     currentCoords = coords;
@@ -291,13 +318,10 @@ function startManualPinMode() {
     if (gpsBox) renderGpsStatusBox(gpsBox);
     const btnSubmit = document.getElementById('btn-submit-upload');
     if (btnSubmit) btnSubmit.disabled = false;
-    showToast('Координати встановлено!', 'success');
+    showToast('Точку встановлено на карті!', 'success');
   });
 }
 
-/**
- * Use device geolocation as coordinates
- */
 function useCurrentDeviceLocation() {
   if (!navigator.geolocation) {
     showToast('Геолокація недоступна', 'error');
@@ -315,7 +339,7 @@ function useCurrentDeviceLocation() {
       if (gpsBox) renderGpsStatusBox(gpsBox);
       const btnSubmit = document.getElementById('btn-submit-upload');
       if (btnSubmit) btnSubmit.disabled = false;
-      showToast('Поточну геолокацію застосовано!', 'success');
+      showToast('Поточну локацію застосовано!', 'success');
     },
     (err) => {
       showToast('Не вдалося отримати GPS. Будь ласка, вкажіть точку на карті.', 'error');
@@ -325,7 +349,7 @@ function useCurrentDeviceLocation() {
 }
 
 /**
- * Handle Final Upload to Firebase (Blobs -> Storage, Doc -> Firestore)
+ * Handle Final Upload to Firebase (Firestore Data URLs + Geohash + GroupCode)
  */
 async function handleUploadSubmit() {
   if (!processedData || !currentCoords) {
@@ -335,6 +359,18 @@ async function handleUploadSubmit() {
 
   const descInput = document.getElementById('photo-desc-input');
   const description = descInput ? descInput.value.trim() : '';
+  const selectGroup = document.getElementById('select-photo-group');
+  const inputCustomGroup = document.getElementById('input-custom-group');
+  
+  let finalGroupCode = '';
+  if (selectGroup) {
+    if (selectGroup.value === '__custom__' && inputCustomGroup) {
+      finalGroupCode = inputCustomGroup.value.trim().toUpperCase();
+    } else {
+      finalGroupCode = selectGroup.value.trim().toUpperCase();
+    }
+  }
+
   const btnSubmit = document.getElementById('btn-submit-upload');
   const progressBox = document.getElementById('upload-progress-box');
   const progressFill = document.getElementById('progress-bar-fill');
@@ -375,6 +411,7 @@ async function handleUploadSubmit() {
       mainUrl: storageUrls.mainUrl,
       thumbUrl: storageUrls.thumbUrl,
       authorName: getCurrentDisplayName(),
+      groupCode: finalGroupCode || null,
       userId: userId
     };
 

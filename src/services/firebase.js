@@ -106,6 +106,7 @@ export async function savePhotoDocument(photoData) {
     mainUrl: photoData.mainUrl,
     thumbUrl: photoData.thumbUrl,
     authorName: photoData.authorName || 'Мандрівник',
+    groupCode: photoData.groupCode || null,
     userId: photoData.userId,
     createdAt: serverTimestamp()
   };

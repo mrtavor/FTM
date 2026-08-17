@@ -109,15 +109,30 @@ async function handleMapViewportChange() {
   }, 220);
 }
 
+import { getActiveGroupCode, getFilterMode, onGroupChange } from '../services/groupService.js';
+
 /**
- * Re-render markers depending on current zoom level
+ * Re-render markers depending on current zoom level and active group filter
  */
 export function renderMapMarkers() {
   if (!mapInstance || !clusterGroup || !singleMarkersLayer) return;
 
   const currentZoom = mapInstance.getZoom();
   const bounds = mapInstance.getBounds();
-  const visiblePhotos = geoService.getCachedPhotosInBounds(bounds);
+  const allVisiblePhotos = geoService.getCachedPhotosInBounds(bounds);
+
+  const activeGroup = getActiveGroupCode();
+  const filterMode = getFilterMode();
+
+  // Filter photos based on group mode
+  const visiblePhotos = allVisiblePhotos.filter((photo) => {
+    if (filterMode === 'group' && activeGroup) {
+      return photo.groupCode === activeGroup;
+    }
+    // 'all' mode: show public photos + current group photos
+    if (!photo.groupCode) return true;
+    return photo.groupCode === activeGroup;
+  });
 
   clusterGroup.clearLayers();
   singleMarkersLayer.clearLayers();

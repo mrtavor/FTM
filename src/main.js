@@ -9,6 +9,7 @@ import { openUploadModal } from './components/uploadModal.js';
 import { openSettingsModal } from './components/settingsModal.js';
 import { openInfoModal } from './components/infoModal.js';
 import { openProfileModal, updateHeaderNickDisplay } from './components/profileModal.js';
+import { openFriendsModal, updateHeaderGroupBadge } from './components/friendsModal.js';
 import { loadSampleLocations } from './utils/mockData.js';
 import { showToast } from './utils/toast.js';
 import { isConfigured } from './utils/config.js';
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const { auth, isMock } = initFirebase();
   initAuth(auth);
   updateHeaderNickDisplay();
+  updateHeaderGroupBadge();
 
   // 2. Initialize Leaflet Map
   const map = initMap('map');
@@ -71,6 +73,16 @@ function setupNavigationAndControls() {
   }
 
   // Header Actions
+  const btnFriends = document.getElementById('btn-friends');
+  if (btnFriends) {
+    btnFriends.onclick = () => openFriendsModal();
+  }
+
+  const groupBadge = document.getElementById('header-group-badge');
+  if (groupBadge) {
+    groupBadge.onclick = () => openFriendsModal();
+  }
+
   const btnProfile = document.getElementById('btn-profile');
   if (btnProfile) {
     btnProfile.onclick = () => openProfileModal();
