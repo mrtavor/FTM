@@ -276,9 +276,15 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
     popupAnchor: [0, -iconAnchor[1] + 10]
   });
 
-  const marker = L.marker([photo.lat, photo.lng], { icon: customIcon });
+  const marker = L.marker([photo.lat, photo.lng], {
+    icon: customIcon,
+    riseOnHover: true,
+    keyboard: true,
+    title: photo.description || 'Фото'
+  });
 
-  marker.on('click', () => {
+  marker.on('click', (e) => {
+    L.DomEvent.stopPropagation(e);
     openPhotoDetailModal(photo);
   });
 
