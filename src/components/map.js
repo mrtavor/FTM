@@ -41,6 +41,24 @@ export function initMap(containerId = 'map') {
     zoomControl: false
   });
 
+  // Bulletproof direct click delegation in capture phase for PC & Mobile
+  const mapContainer = document.getElementById(containerId);
+  if (mapContainer && !mapContainer._hasPhotoClickListener) {
+    mapContainer._hasPhotoClickListener = true;
+    mapContainer.addEventListener('click', (e) => {
+      const pin = e.target.closest('[data-photo-id]');
+      if (pin) {
+        const photoId = pin.getAttribute('data-photo-id');
+        const photo = geoService.cache.get(photoId);
+        if (photo) {
+          e.preventDefault();
+          e.stopPropagation();
+          openPhotoDetailModal(photo);
+        }
+      }
+    }, true);
+  }
+
   // Fast Eye-Care CartoDB Voyager TileLayer with pre-buffering
   const tileLayer = L.tileLayer(
     'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
@@ -246,7 +264,7 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
 
   if (styleType === 'thumb' && photo.thumbUrl) {
     iconHtml = `
-      <div class="thumb-pin-container">
+      <div class="thumb-pin-container" data-photo-id="${photo.id}">
         <img class="thumb-pin-image" src="${photo.thumbUrl}" alt="Фото" loading="lazy" />
         <span class="thumb-pin-badge">${photo.emoji || '📸'}</span>
       </div>
@@ -255,7 +273,7 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
     iconAnchor = [27, 62];
   } else {
     iconHtml = `
-      <div class="emoji-pin-bubble">
+      <div class="emoji-pin-bubble" data-photo-id="${photo.id}">
         <span>${photo.emoji || '📍'}</span>
       </div>
     `;
