@@ -1,6 +1,6 @@
 /**
  * Friends Circle, Group Metadata, Members & Real-time Notifications Service
- * Full Unicode & Cyrillic (Ukrainian) Tag Support
+ * Strictly preserves exact Unicode / Cyrillic / Latin characters
  */
 import { showToast } from '../utils/toast.js';
 
@@ -16,7 +16,7 @@ let filterMode = 'all';
 const groupListeners = [];
 
 /**
- * Sanitize Group Tag with full Ukrainian & Unicode support
+ * Sanitize Group Tag: trim and uppercase, preserving exact characters
  */
 export function sanitizeGroupTag(str) {
   if (!str) return '';
@@ -25,30 +25,6 @@ export function sanitizeGroupTag(str) {
     .toUpperCase()
     .replace(/[\s\/\\]+/g, '_')
     .replace(/[^\p{L}\p{N}_\-]/gu, '');
-}
-
-/**
- * Generate equivalent tag variants across Latin & Cyrillic layouts
- * (e.g. Latin 'RRR' <-> Cyrillic 'РРР', 'ABC' <-> 'АВС')
- */
-export function getHomoglyphVariants(tag) {
-  if (!tag) return [];
-  const clean = sanitizeGroupTag(tag);
-  const variants = new Set([clean]);
-
-  let toLatin = '';
-  for (const ch of clean) {
-    toLatin += CYR_TO_LAT[ch] || ch;
-  }
-  variants.add(toLatin);
-
-  let toCyrillic = '';
-  for (const ch of clean) {
-    toCyrillic += LAT_TO_CYR[ch] || ch;
-  }
-  variants.add(toCyrillic);
-
-  return Array.from(variants);
 }
 
 function initGroupFromStorage() {
@@ -75,135 +51,80 @@ export function getActiveGroupCode() {
 }
 
 export function getActiveGroupName() {
-  return activeGroupName || activeGroupCode || 'Моя група';
-}
-
-export function setActiveGroup(tag, name) {
-  const cleanTag = sanitizeGroupTag(tag);
-  activeGroupCode = cleanTag;
-  activeGroupName = name?.trim() || cleanTag;
-
-  localStorage.setItem(GROUP_KEY, activeGroupCode);
-  localStorage.setItem(GROUP_NAME_KEY, activeGroupName);
-
-  if (activeGroupCode) {
-    filterMode = 'group';
-    localStorage.setItem(GROUP_FILTER_KEY, 'group');
-    requestNotificationPermission();
-  }
-  notifyGroupListeners();
-}
-
-export function setActiveGroupCode(code) {
-  setActiveGroup(code, activeGroupName || code);
-}
-
-export function clearActiveGroup() {
-  activeGroupCode = '';
-  activeGroupName = '';
-  filterMode = 'all';
-  localStorage.removeItem(GROUP_KEY);
-  localStorage.removeItem(GROUP_NAME_KEY);
-  localStorage.setItem(GROUP_FILTER_KEY, 'all');
-  notifyGroupListeners();
+  return activeGroupName || activeGroupCode;
 }
 
 export function getFilterMode() {
   return filterMode;
 }
 
-export function setFilterMode(mode) {
-  filterMode = mode;
-  localStorage.setItem(GROUP_FILTER_KEY, mode);
+export function setActiveGroup(groupCode, groupName = '') {
+  const cleanCode = sanitizeGroupTag(groupCode);
+  const cleanName = groupName?.trim() || cleanCode;
+
+  activeGroupCode = cleanCode;
+  activeGroupName = cleanName;
+  filterMode = cleanCode ? 'group' : 'all';
+
+  if (cleanCode) {
+    localStorage.setItem(GROUP_KEY, cleanCode);
+    localStorage.setItem(GROUP_NAME_KEY, cleanName);
+    localStorage.setItem(GROUP_FILTER_KEY, 'group');
+  } else {
+    localStorage.removeItem(GROUP_KEY);
+    localStorage.removeItem(GROUP_NAME_KEY);
+    localStorage.setItem(GROUP_FILTER_KEY, 'all');
+  }
+
   notifyGroupListeners();
 }
 
-/* ==========================================================================
-   NOTIFICATION PREFERENCES (Global & Per-Member)
-   ========================================================================== */
+export function clearActiveGroup() {
+  setActiveGroup('', '');
+}
 
 export function isGroupNotificationEnabled(groupCode) {
-  const target = groupCode || activeGroupCode;
-  if (!target) return false;
-  const val = localStorage.getItem(NOTIFY_GLOBAL_PREFIX + target);
+  if (!groupCode) return false;
+  const clean = sanitizeGroupTag(groupCode);
+  const val = localStorage.getItem(NOTIFY_GLOBAL_PREFIX + clean);
   return val === null ? true : val === 'true';
 }
 
 export function setGroupNotificationEnabled(groupCode, enabled) {
-  const target = groupCode || activeGroupCode;
-  if (!target) return;
-  localStorage.setItem(NOTIFY_GLOBAL_PREFIX + target, String(enabled));
-  notifyGroupListeners();
+  if (!groupCode) return;
+  const clean = sanitizeGroupTag(groupCode);
+  localStorage.setItem(NOTIFY_GLOBAL_PREFIX + clean, enabled ? 'true' : 'false');
 }
 
-export function isMemberNotificationEnabled(groupCode, authorName) {
-  const target = groupCode || activeGroupCode;
-  if (!target || !authorName) return false;
-  if (!isGroupNotificationEnabled(target)) return false;
-  const key = `${NOTIFY_MEMBER_PREFIX}${target}_${authorName}`;
-  const val = localStorage.getItem(key);
+export function isMemberNotificationEnabled(groupCode, memberName) {
+  if (!groupCode || !memberName) return true;
+  const cleanGroup = sanitizeGroupTag(groupCode);
+  const val = localStorage.getItem(`${NOTIFY_MEMBER_PREFIX}${cleanGroup}_${memberName}`);
   return val === null ? true : val === 'true';
 }
 
-export function setMemberNotificationEnabled(groupCode, authorName, enabled) {
-  const target = groupCode || activeGroupCode;
-  if (!target || !authorName) return;
-  const key = `${NOTIFY_MEMBER_PREFIX}${target}_${authorName}`;
-  localStorage.setItem(key, String(enabled));
-  notifyGroupListeners();
+export function setMemberNotificationEnabled(groupCode, memberName, enabled) {
+  if (!groupCode || !memberName) return;
+  const cleanGroup = sanitizeGroupTag(groupCode);
+  localStorage.setItem(`${NOTIFY_MEMBER_PREFIX}${cleanGroup}_${memberName}`, enabled ? 'true' : 'false');
 }
 
-export async function requestNotificationPermission() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    try {
-      await Notification.requestPermission();
-    } catch (e) { /* ignore */ }
+export function subscribeGroupChanges(callback) {
+  if (typeof callback === 'function') {
+    groupListeners.push(callback);
   }
-}
-
-export function notifyNewGroupPhoto(photo, onNavigate) {
-  const group = photo.groupCode;
-  const author = photo.authorName || 'Учасник';
-
-  if (!isMemberNotificationEnabled(group, author)) {
-    return;
-  }
-
-  showToast(`🔔 ${author} щойно виставив(-ла) нове фото в групі "${activeGroupName || group}"!`, 'success', 5000);
-
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      const notif = new Notification(`Нове фото від ${author} 📍`, {
-        body: photo.description ? `"${photo.description}" в групі ${activeGroupName || group}` : `Нове місце в групі ${activeGroupName || group}`,
-        icon: photo.thumbUrl || '/favicon.ico'
-      });
-      notif.onclick = () => {
-        window.focus();
-        if (typeof onNavigate === 'function') {
-          onNavigate(photo.lat, photo.lng);
-        }
-      };
-    } catch (e) { /* ignore */ }
-  }
-}
-
-export function getGroupShareUrl(code) {
-  const targetCode = code || activeGroupCode;
-  const baseUrl = window.location.origin + window.location.pathname;
-  return `${baseUrl}?group=${encodeURIComponent(targetCode)}`;
-}
-
-export function onGroupChange(callback) {
-  groupListeners.push(callback);
-  callback({ activeGroupCode, activeGroupName, filterMode });
-  return () => {
-    const idx = groupListeners.indexOf(callback);
-    if (idx !== -1) groupListeners.splice(idx, 1);
-  };
 }
 
 function notifyGroupListeners() {
-  groupListeners.forEach((fn) => {
-    try { fn({ activeGroupCode, activeGroupName, filterMode }); } catch (e) { console.error(e); }
+  groupListeners.forEach((cb) => {
+    try {
+      cb({
+        groupCode: activeGroupCode,
+        groupName: activeGroupName,
+        filterMode: filterMode
+      });
+    } catch (e) {
+      console.warn('Group listener error:', e);
+    }
   });
 }

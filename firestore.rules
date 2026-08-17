@@ -2,42 +2,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Колекція груп друзів
+    // Доступ до груп
     match /groups/{groupTag} {
-      allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null && (resource.data.ownerId == request.auth.uid || resource.data.ownerId == null);
+      allow read, write: if true;
     }
 
-    // Колекція фотографій на карті
+    // Доступ до фотографій
     match /photos/{photoId} {
-      allow read: if true;
-      
-      allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.description is string
-        && request.resource.data.description.size() <= 300
-        && request.resource.data.emoji is string
-        && request.resource.data.emoji.size() <= 10
-        && request.resource.data.lat is number
-        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
-        && request.resource.data.lng is number
-        && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
-        && request.resource.data.geohash is string
-        && request.resource.data.geohash.size() <= 12
-        && request.resource.data.mainUrl is string
-        && request.resource.data.thumbUrl is string
-        && (request.resource.data.authorName == null || (request.resource.data.authorName is string && request.resource.data.authorName.size() <= 60))
-        && (request.resource.data.groupCode == null || (request.resource.data.groupCode is string && request.resource.data.groupCode.size() <= 50))
-        && request.resource.data.createdAt != null;
-        
-      allow update, delete: if request.auth != null 
-        && resource.data.userId == request.auth.uid;
+      allow read, write: if true;
     }
     
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if true;
     }
   }
 }
