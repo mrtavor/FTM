@@ -141,24 +141,27 @@
   cursor: pointer;
 }
 
-/* Preview Card */
+/* Preview Card (Clean, Full-width, No black borders) */
 .preview-card {
   position: relative;
+  width: 100%;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background-color: #000;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
   display: flex;
   justify-content: center;
   align-items: center;
-  max-height: 240px;
 }
 
 .preview-img {
-  max-width: 100%;
-  max-height: 240px;
+  width: 100%;
+  height: auto;
+  max-height: 380px;
   object-fit: contain;
   display: block;
+  border-radius: calc(var(--radius-md) - 1px);
 }
 
 .preview-badge-group {
@@ -302,19 +305,21 @@
    ========================================================================== */
 .photo-detail-image-box {
   width: 100%;
-  background: #111;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
-  max-height: 420px;
 }
 
 .photo-detail-full-img {
-  max-width: 100%;
-  max-height: 420px;
+  width: 100%;
+  height: auto;
+  max-height: 460px;
   object-fit: contain;
+  display: block;
 }
 
 .photo-detail-meta {
