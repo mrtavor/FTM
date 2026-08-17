@@ -207,7 +207,7 @@ export async function fetchGroupMetadata(tag) {
 }
 
 /**
- * Delete a Group (Admin Only)
+ * Delete a Group (Admin Only) - Broadcasts deletion signal instantly to all connected users
  */
 export async function deleteGroup(tag) {
   const cleanTag = sanitizeGroupTag(tag);
@@ -215,7 +215,12 @@ export async function deleteGroup(tag) {
   if (db) {
     try {
       const groupRef = doc(db, 'groups', cleanTag);
-      await deleteDoc(groupRef);
+      // 1. Broadcast deletion status so all active onSnapshot listeners trigger immediately
+      await setDoc(groupRef, { isDeleted: true, status: 'deleted', updatedAt: serverTimestamp() }, { merge: true });
+      // 2. Remove document from Firestore
+      setTimeout(async () => {
+        try { await deleteDoc(groupRef); } catch (e) {}
+      }, 800);
     } catch (e) {
       console.warn('Delete group warning:', e);
     }

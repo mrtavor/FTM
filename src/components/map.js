@@ -112,22 +112,35 @@ export function initMap(containerId = 'map') {
       // 2. Group metadata real-time sync (name change, ban, deletion)
       metaUnsubscribe = subscribeToGroupMetadata(activeGroupCode, (meta) => {
         const currentUserName = getCurrentDisplayName();
-        if (!meta.exists) {
+
+        if (!meta.exists || meta.isDeleted || meta.status === 'deleted') {
           clearActiveGroup();
           updateHeaderGroupBadge();
-          showToast('Цю групу було видалено адміністратором', 'info');
-          renderMapMarkers();
-        } else {
-          const banned = Array.isArray(meta.bannedMembers) ? meta.bannedMembers : [];
-          if (banned.includes(currentUserName)) {
-            clearActiveGroup();
-            updateHeaderGroupBadge();
-            showToast('Вас було вилучено з цієї групи', 'error');
-            renderMapMarkers();
-          } else if (meta.name) {
-            setActiveGroup(activeGroupCode, meta.name);
-            updateHeaderGroupBadge();
+          showToast('Цю групу було видалено адміністратором 🗑️', 'info', 4000);
+          const friendsBackdrop = document.getElementById('friends-modal-backdrop');
+          if (friendsBackdrop) {
+            friendsBackdrop.remove();
           }
+          renderMapMarkers();
+          return;
+        }
+
+        const banned = Array.isArray(meta.bannedMembers) ? meta.bannedMembers : [];
+        if (banned.includes(currentUserName)) {
+          clearActiveGroup();
+          updateHeaderGroupBadge();
+          showToast('Вас було вилучено з цієї групи адміністратором 🚫', 'error', 4000);
+          const friendsBackdrop = document.getElementById('friends-modal-backdrop');
+          if (friendsBackdrop) {
+            friendsBackdrop.remove();
+          }
+          renderMapMarkers();
+          return;
+        }
+
+        if (meta.name) {
+          setActiveGroup(activeGroupCode, meta.name);
+          updateHeaderGroupBadge();
         }
       });
     }
