@@ -1,12 +1,10 @@
 /**
- * High-Performance Optimized Map Component (Leaflet.js + MarkerCluster)
+ * High-Performance Optimized Map Component (Leaflet.js)
  * Dynamic zoom rendering:
- * - Zoom <= 10: Smooth Clusters
- * - Zoom 11-14: Custom Emoji Pins
- * - Zoom >= 15: Photo Micro-Thumbnails
+ * - Zoom <= 13: Custom Emoji Pins
+ * - Zoom >= 14: Photo Micro-Thumbnails
  */
 import L from 'leaflet';
-import 'leaflet.markercluster';
 import { geoService } from '../services/geoService.js';
 import { fetchPhotosForGeohashes, subscribeToGroupUpdates, subscribeToGroupMetadata } from '../services/firebase.js';
 import { getActiveGroupCode, getFilterMode, onGroupChange, notifyNewGroupPhoto, clearActiveGroup, setActiveGroup } from '../services/groupService.js';
@@ -17,10 +15,8 @@ import { getUserCountry } from '../services/countryService.js';
 import { showToast } from '../utils/toast.js';
 
 let mapInstance = null;
-let clusterGroup = null;
 let singleMarkersLayer = null;
 let isPickerActive = false;
-let onLocationSelectedCallback = null;
 let debounceTimer = null;
 let groupUnsubscribe = null;
 let metaUnsubscribe = null;
@@ -43,7 +39,7 @@ export function initMap(containerId = 'map') {
 
   // --- Bulletproof Pin Click Detection (pointerdown + pointerup) ---
   // Leaflet on PC consumes 'click' events via its drag detection.
-  // We bypass this by tracking pointerdown and pointerup ourselves.
+  // We bypass this by tracking pointerdown and pointerup independently.
   const mapContainer = document.getElementById(containerId);
   if (mapContainer && !mapContainer._hasPhotoClickListener) {
     mapContainer._hasPhotoClickListener = true;
@@ -61,14 +57,14 @@ export function initMap(containerId = 'map') {
     mapContainer.addEventListener('pointerup', (e) => {
       const dx = Math.abs(e.clientX - downX);
       const dy = Math.abs(e.clientY - downY);
-      // Only open if: barely moved (< 10px) AND we had a pin on pointerdown
-      if (dx < 10 && dy < 10 && downTarget) {
+      // Treat as a click if pointer barely moved (< 12px) and we had a pin on pointerdown
+      if (dx < 12 && dy < 12 && downTarget) {
         const photoId = downTarget.getAttribute('data-photo-id');
         const photo = geoService.cache.get(photoId);
         if (photo) {
           e.preventDefault();
           e.stopPropagation();
-          // Small delay to let Leaflet finish its own event processing
+          // Defer to next tick so Leaflet finishes its own event processing first
           setTimeout(() => showPhotoViewer(photo, () => renderMapMarkers()), 0);
         }
       }
@@ -76,8 +72,8 @@ export function initMap(containerId = 'map') {
     }, { capture: true });
   }
 
-  // Fast Eye-Care CartoDB Voyager TileLayer with pre-buffering
-  const tileLayer = L.tileLayer(
+  // CartoDB Voyager tiles
+  L.tileLayer(
     'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
     {
       attribution: '&copy; <a href="https://carto.com/">CARTO</a>, &copy; OSM',
@@ -86,76 +82,32 @@ export function initMap(containerId = 'map') {
       keepBuffer: 6,
       updateInterval: 120
     }
-  );
-  tileLayer.addTo(mapInstance);
-
-  // Cluster Layer with instant click handling on all zoom levels
-  clusterGroup = L.markerClusterGroup({
-    showCoverageOnHover: false,
-    maxClusterRadius: 40,
-    spiderfyOnMaxZoom: true,
-    zoomToBoundsOnClick: true,
-    chunkedLoading: true,
-    chunkInterval: 100,
-    iconCreateFunction: (cluster) => {
-      const count = cluster.getChildCount();
-      let sizeClass = '';
-      if (count >= 50) sizeClass = 'cluster-large';
-      else if (count >= 15) sizeClass = 'cluster-medium';
-
-      return L.divIcon({
-        html: `<div class="cluster-inner ${sizeClass}">${count}</div>`,
-        className: 'marker-cluster-custom',
-        iconSize: L.point(44, 44),
-        iconAnchor: [22, 22]
-      });
-    }
-  });
-
-  // Handle direct click on unclustered markers inside cluster group
-  clusterGroup.on('click', (a) => {
-    if (a.layer && a.layer.photoData) {
-      openPhotoDetailModal(a.layer.photoData);
-    }
-  });
+  ).addTo(mapInstance);
 
   singleMarkersLayer = L.layerGroup();
-  mapInstance.addLayer(clusterGroup);
   mapInstance.addLayer(singleMarkersLayer);
 
   mapInstance.on('moveend zoomend', handleMapViewportChange);
 
   // Setup real-time listener for current group and metadata
   function attachGroupSync(targetGroupCode) {
-    if (groupUnsubscribe) {
-      groupUnsubscribe();
-      groupUnsubscribe = null;
-    }
-    if (metaUnsubscribe) {
-      metaUnsubscribe();
-      metaUnsubscribe = null;
-    }
+    if (groupUnsubscribe) { groupUnsubscribe(); groupUnsubscribe = null; }
+    if (metaUnsubscribe) { metaUnsubscribe(); metaUnsubscribe = null; }
 
     const currentCode = targetGroupCode || getActiveGroupCode();
 
     if (currentCode) {
-      // 1. Photos real-time sync (instant pin add/remove)
+      // 1. Live photos sync (instant pin add/remove)
       groupUnsubscribe = subscribeToGroupUpdates(
         currentCode,
         (newPhoto) => {
-          if (newPhoto) {
-            notifyNewGroupPhoto(newPhoto, (lat, lng) => {
-              flyToCoords(lat, lng, 15);
-            });
-          }
+          if (newPhoto) notifyNewGroupPhoto(newPhoto);
           renderMapMarkers();
         },
-        (removedPhotoId) => {
-          renderMapMarkers();
-        }
+        () => renderMapMarkers()
       );
 
-      // 2. Group metadata real-time sync (name change, ban, deletion)
+      // 2. Group metadata sync (name change, ban, deletion)
       metaUnsubscribe = subscribeToGroupMetadata(currentCode, (meta) => {
         const currentUserName = getCurrentDisplayName();
 
@@ -163,10 +115,7 @@ export function initMap(containerId = 'map') {
           clearActiveGroup();
           updateHeaderGroupBadge();
           showToast('Цю групу було видалено адміністратором 🗑️', 'info', 4000);
-          const friendsBackdrop = document.getElementById('friends-modal-backdrop');
-          if (friendsBackdrop) {
-            friendsBackdrop.remove();
-          }
+          document.getElementById('friends-modal-backdrop')?.remove();
           renderMapMarkers();
           return;
         }
@@ -176,10 +125,7 @@ export function initMap(containerId = 'map') {
           clearActiveGroup();
           updateHeaderGroupBadge();
           showToast('Вас було вилучено з цієї групи адміністратором 🚫', 'error', 4000);
-          const friendsBackdrop = document.getElementById('friends-modal-backdrop');
-          if (friendsBackdrop) {
-            friendsBackdrop.remove();
-          }
+          document.getElementById('friends-modal-backdrop')?.remove();
           renderMapMarkers();
           return;
         }
@@ -190,19 +136,17 @@ export function initMap(containerId = 'map') {
         }
       });
     }
+
     renderMapMarkers();
   }
 
-  // Subscribe on map startup
   attachGroupSync(getActiveGroupCode());
 
-  // Subscribe on any group change event
   onGroupChange(({ groupCode }) => {
     attachGroupSync(groupCode);
   });
 
   handleMapViewportChange();
-
   return mapInstance;
 }
 
@@ -218,7 +162,6 @@ async function handleMapViewportChange() {
     const zoom = mapInstance.getZoom();
 
     const uncachedHashes = geoService.getUncachedGeohashes(bounds, zoom);
-
     if (uncachedHashes.length > 0) {
       const newPhotos = await fetchPhotosForGeohashes(uncachedHashes);
       geoService.addPhotosToCache(newPhotos);
@@ -230,10 +173,10 @@ async function handleMapViewportChange() {
 }
 
 /**
- * Re-render markers depending on current zoom level and active group filter
+ * Re-render markers based on current zoom level and active group filter
  */
 export function renderMapMarkers() {
-  if (!mapInstance || !clusterGroup || !singleMarkersLayer) return;
+  if (!mapInstance || !singleMarkersLayer) return;
 
   const currentZoom = mapInstance.getZoom();
   const bounds = mapInstance.getBounds();
@@ -243,36 +186,27 @@ export function renderMapMarkers() {
   let visiblePhotos = [];
 
   if (filterMode === 'group' && activeGroup) {
-    // In group mode: render all photos belonging to the group from cache
     for (const photo of geoService.cache.values()) {
-      if (photo.groupCode === activeGroup) {
-        visiblePhotos.push(photo);
-      }
+      if (photo.groupCode === activeGroup) visiblePhotos.push(photo);
     }
   } else {
-    // In public / all photos mode: render photos in current viewport
-    const allVisiblePhotos = geoService.getCachedPhotosInBounds(bounds);
-    visiblePhotos = allVisiblePhotos.filter((photo) => {
-      if (!photo.groupCode) return true;
-      return photo.groupCode === activeGroup;
-    });
+    const allVisible = geoService.getCachedPhotosInBounds(bounds);
+    visiblePhotos = allVisible.filter((photo) =>
+      !photo.groupCode || photo.groupCode === activeGroup
+    );
   }
 
   singleMarkersLayer.clearLayers();
-  if (clusterGroup) {
-    clusterGroup.clearLayers();
-  }
 
-  // Render all markers directly to singleMarkersLayer for guaranteed 100% click response on PC and Mobile
   visiblePhotos.forEach((photo) => {
     const styleType = currentZoom >= 14 ? 'thumb' : 'emoji';
-    const marker = createMarkerForPhoto(photo, styleType);
-    singleMarkersLayer.addLayer(marker);
+    singleMarkersLayer.addLayer(createMarkerForPhoto(photo, styleType));
   });
 }
 
 /**
- * Create Leaflet Marker with Custom DivIcon
+ * Create a Leaflet Marker with Custom DivIcon
+ * Click is handled exclusively by the container-level pointerdown/pointerup delegation
  */
 function createMarkerForPhoto(photo, styleType = 'emoji') {
   let iconHtml = '';
@@ -313,28 +247,6 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
   });
 
   marker.photoData = photo;
-
-  // 1. Leaflet Marker Click Event
-  marker.on('click', (e) => {
-    if (e && e.originalEvent) {
-      L.DomEvent.stopPropagation(e);
-      L.DomEvent.preventDefault(e);
-    }
-    showPhotoViewer(photo, () => renderMapMarkers());
-  });
-
-  // 2. Direct Native DOM Click & Mouseup Event for Desktop Mice
-  marker.on('add', () => {
-    const el = marker.getElement();
-    if (el) {
-      el.style.cursor = 'pointer';
-      el.onclick = (e) => {
-        e.stopPropagation();
-        showPhotoViewer(photo, () => renderMapMarkers());
-      };
-    }
-  });
-
   return marker;
 }
 
@@ -350,12 +262,10 @@ export function locateUser() {
 
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      mapInstance.flyTo([lat, lng], 14, { duration: 1.4 });
+      mapInstance.flyTo([pos.coords.latitude, pos.coords.longitude], 14, { duration: 1.4 });
       showToast('Локацію знайдено!', 'success');
     },
-    (err) => {
+    () => {
       showToast('Не вдалося отримати GPS. Перевірте дозволи геоданих.', 'error');
     },
     { enableHighAccuracy: true, timeout: 8000 }
@@ -364,7 +274,6 @@ export function locateUser() {
 
 export function startManualLocationPicker(onConfirmed) {
   isPickerActive = true;
-  onLocationSelectedCallback = onConfirmed;
 
   const crosshair = document.getElementById('crosshair-picker');
   if (crosshair) crosshair.classList.remove('hidden');
@@ -375,8 +284,8 @@ export function startManualLocationPicker(onConfirmed) {
       if (!mapInstance) return;
       const center = mapInstance.getCenter();
       stopManualLocationPicker();
-      if (typeof onLocationSelectedCallback === 'function') {
-        onLocationSelectedCallback({
+      if (typeof onConfirmed === 'function') {
+        onConfirmed({
           lat: Number(center.lat.toFixed(6)),
           lng: Number(center.lng.toFixed(6))
         });

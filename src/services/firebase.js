@@ -3,7 +3,7 @@
  * Auth, Cloud Firestore & Cloud Storage
  */
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import {
   getFirestore,
   collection,
@@ -13,13 +13,17 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
+  onSnapshot,
   serverTimestamp,
   orderBy,
   limit
 } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getStorage } from 'firebase/storage';
 import { getFirebaseConfig, isConfigured } from '../utils/config.js';
 import { geoService } from './geoService.js';
+import { blobToDataUrl } from './imageProcessor.js';
+import { sanitizeGroupTag } from './groupService.js';
 
 let app = null;
 let auth = null;
@@ -52,40 +56,29 @@ export function initFirebase() {
   }
 }
 
-import { blobToDataUrl } from './imageProcessor.js';
-
 /**
  * Instant Client-Side Image Storage Processor (Zero Storage Hangs)
  * Converts compressed WebP blobs to optimized data URLs directly stored in Firestore
- * Fits within document limit (< 60 KB) and avoids Cloud Storage network blocks
- * @param {Blob} mainBlob 
- * @param {Blob} thumbBlob 
- * @param {string} userId 
- * @returns {Promise<{mainUrl: string, thumbUrl: string, storagePathMain: string, storagePathThumb: string}>}
+ * @param {Blob} mainBlob
+ * @param {Blob} thumbBlob
+ * @param {string} userId
+ * @returns {Promise<{mainUrl: string, thumbUrl: string}>}
  */
 export async function uploadPhotoBlobs(mainBlob, thumbBlob, userId) {
-  // Convert blobs to ultra-compact WebP Data URLs instantly in memory
   const mainDataUrl = await blobToDataUrl(mainBlob);
   const thumbDataUrl = await blobToDataUrl(thumbBlob);
-
-  return {
-    mainUrl: mainDataUrl,
-    thumbUrl: thumbDataUrl,
-    storagePathMain: '',
-    storagePathThumb: ''
-  };
+  return { mainUrl: mainDataUrl, thumbUrl: thumbDataUrl };
 }
 
 /**
  * Save photo metadata to Firestore
- * @param {Object} photoData 
+ * @param {Object} photoData
  * @returns {Promise<string>} Created photo ID
  */
 export async function savePhotoDocument(photoData) {
   const photoId = `snap_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
   if (!db) {
-    // Save to local cache in demo mode
     const mockDoc = {
       id: photoId,
       ...photoData,
@@ -112,7 +105,6 @@ export async function savePhotoDocument(photoData) {
   };
 
   await setDoc(photoRef, payload);
-  // Add to client-side cache immediately
   geoService.addPhotosToCache([payload]);
   return photoId;
 }
@@ -121,9 +113,7 @@ export async function savePhotoDocument(photoData) {
  * Fetch photos from Firestore for visible geohashes
  */
 export async function fetchPhotosForGeohashes(geohashes) {
-  if (!db || geohashes.length === 0) {
-    return [];
-  }
+  if (!db || geohashes.length === 0) return [];
 
   const results = [];
   const photosCol = collection(db, 'photos');
@@ -138,8 +128,7 @@ export async function fetchPhotosForGeohashes(geohashes) {
       );
       const snapshot = await getDocs(q);
       snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        results.push({ id: docSnap.id, ...data });
+        results.push({ id: docSnap.id, ...docSnap.data() });
       });
     } catch (e) {
       console.warn(`Error querying geohash ${hash}:`, e);
@@ -176,9 +165,6 @@ export async function fetchGroupPhotos(groupCode) {
   }
 }
 
-import { onSnapshot, getDoc } from 'firebase/firestore';
-import { sanitizeGroupTag } from './groupService.js';
-
 /**
  * Save or create Group metadata (Name + Tag) with uniqueness check
  */
@@ -189,8 +175,7 @@ export async function saveGroupMetadata(groupData, isNewCreation = false) {
 
   if (db) {
     const groupRef = doc(db, 'groups', tag);
-    
-    // If creating a brand new group, verify tag isn't already taken
+
     if (isNewCreation) {
       try {
         const existingSnap = await getDoc(groupRef);
@@ -201,14 +186,12 @@ export async function saveGroupMetadata(groupData, isNewCreation = false) {
           }
         }
       } catch (err) {
-        if (err.message && err.message.includes('вже існує')) {
-          throw err;
-        }
+        if (err.message && err.message.includes('вже існує')) throw err;
       }
     }
 
     const payload = {
-      tag: tag,
+      tag,
       name: groupData.name?.trim() || tag,
       ownerId: groupData.ownerId || '',
       adminName: groupData.adminName || 'Адміністратор',
@@ -231,11 +214,8 @@ export async function saveGroupMetadata(groupData, isNewCreation = false) {
     }
     return payload;
   }
-  return {
-    tag,
-    name: groupData.name || tag,
-    ownerId: groupData.ownerId || ''
-  };
+
+  return { tag, name: groupData.name || tag, ownerId: groupData.ownerId || '' };
 }
 
 /**
@@ -264,23 +244,22 @@ export async function fetchGroupMetadata(tag) {
 }
 
 /**
- * Delete a Group (Admin Only) - Broadcasts deletion signal instantly to all connected users
+ * Delete a Group (Admin Only)
  */
 export async function deleteGroup(tag) {
   const cleanTag = sanitizeGroupTag(tag);
-  if (!cleanTag) return;
-  if (db) {
-    try {
-      const groupRef = doc(db, 'groups', cleanTag);
-      // 1. Broadcast deletion status so all active onSnapshot listeners trigger immediately
-      await setDoc(groupRef, { isDeleted: true, status: 'deleted', updatedAt: serverTimestamp() }, { merge: true });
-      // 2. Remove document from Firestore
-      setTimeout(async () => {
-        try { await deleteDoc(groupRef); } catch (e) {}
-      }, 800);
-    } catch (e) {
-      console.warn('Delete group warning:', e);
-    }
+  if (!cleanTag || !db) return true;
+
+  try {
+    const groupRef = doc(db, 'groups', cleanTag);
+    // Broadcast deletion so all onSnapshot listeners trigger immediately
+    await setDoc(groupRef, { isDeleted: true, status: 'deleted', updatedAt: serverTimestamp() }, { merge: true });
+    // Then remove the document
+    setTimeout(() => {
+      deleteDoc(groupRef).catch(() => {});
+    }, 800);
+  } catch (e) {
+    console.warn('Delete group warning:', e);
   }
   return true;
 }
@@ -290,29 +269,26 @@ export async function deleteGroup(tag) {
  */
 export async function kickMemberFromGroup(groupTag, memberName) {
   const cleanTag = sanitizeGroupTag(groupTag);
-  if (!cleanTag || !memberName) return;
-  if (db) {
-    try {
-      const groupRef = doc(db, 'groups', cleanTag);
-      const snap = await getDoc(groupRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        const banned = Array.isArray(data.bannedMembers) ? data.bannedMembers : [];
-        if (!banned.includes(memberName)) {
-          banned.push(memberName);
-          await setDoc(groupRef, { bannedMembers: banned }, { merge: true });
-        }
+  if (!cleanTag || !memberName || !db) return;
+
+  try {
+    const groupRef = doc(db, 'groups', cleanTag);
+    const snap = await getDoc(groupRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      const banned = Array.isArray(data.bannedMembers) ? data.bannedMembers : [];
+      if (!banned.includes(memberName)) {
+        banned.push(memberName);
+        await setDoc(groupRef, { bannedMembers: banned }, { merge: true });
       }
-    } catch (e) {
-      console.warn('Kick member warning:', e);
     }
+  } catch (e) {
+    console.warn('Kick member warning:', e);
   }
-  return true;
 }
 
 /**
  * Real-time listener for Group Metadata (Name, Tag, Admin changes, Deletion, Ban)
- * Syncs instantaneously across all devices
  */
 export function subscribeToGroupMetadata(groupTag, onUpdate) {
   if (!db || !groupTag) return () => {};
@@ -320,19 +296,15 @@ export function subscribeToGroupMetadata(groupTag, onUpdate) {
   if (!cleanTag) return () => {};
 
   const groupRef = doc(db, 'groups', cleanTag);
-  const unsubscribe = onSnapshot(groupRef, (snap) => {
-    if (typeof onUpdate === 'function') {
-      if (snap.exists()) {
-        onUpdate({ exists: true, ...snap.data() });
-      } else {
-        onUpdate({ exists: false, tag: cleanTag });
+  return onSnapshot(
+    groupRef,
+    (snap) => {
+      if (typeof onUpdate === 'function') {
+        onUpdate(snap.exists() ? { exists: true, ...snap.data() } : { exists: false, tag: cleanTag });
       }
-    }
-  }, (err) => {
-    console.warn('Group metadata sync error:', err);
-  });
-
-  return unsubscribe;
+    },
+    (err) => { console.warn('Group metadata sync error:', err); }
+  );
 }
 
 /**
@@ -366,7 +338,6 @@ export async function registerGroupMember(groupCode, memberObj) {
 
 /**
  * Fetch list of active members in a group with photo counts
- * Guaranteed to show group creator/admin and all joined members
  */
 export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName = '', currentUserId = '') {
   const cleanTag = sanitizeGroupTag(groupCode);
@@ -374,17 +345,12 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
 
   if (!db || !cleanTag) {
     if (currentUserName) {
-      membersMap.set(currentUserName, {
-        name: currentUserName,
-        count: 0,
-        userId: currentUserId,
-        isAdmin: true
-      });
+      membersMap.set(currentUserName, { name: currentUserName, count: 0, userId: currentUserId, isAdmin: true });
     }
     return Array.from(membersMap.values());
   }
 
-  // 1. Fetch Group Doc to get owner/admin and registered members
+  // 1. Load group doc to get owner and registered members
   try {
     const groupRef = doc(db, 'groups', cleanTag);
     const groupSnap = await getDoc(groupRef);
@@ -392,7 +358,6 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
       const groupData = groupSnap.data();
       const realOwnerId = groupData.ownerId || ownerId;
 
-      // Always include Admin in the list
       if (groupData.adminName) {
         membersMap.set(groupData.adminName, {
           name: groupData.adminName,
@@ -402,7 +367,6 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
         });
       }
 
-      // Include all registered members
       const registeredMembers = Array.isArray(groupData.members) ? groupData.members : [];
       registeredMembers.forEach(m => {
         const isAdm = Boolean(realOwnerId && m.uid && m.uid === realOwnerId);
@@ -411,12 +375,7 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
           if (m.uid) existing.userId = m.uid;
           existing.isAdmin = isAdm || existing.isAdmin;
         } else {
-          membersMap.set(m.name, {
-            name: m.name,
-            count: 0,
-            userId: m.uid || '',
-            isAdmin: isAdm
-          });
+          membersMap.set(m.name, { name: m.name, count: 0, userId: m.uid || '', isAdmin: isAdm });
         }
       });
     }
@@ -424,17 +383,14 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
     console.warn('Error reading group doc members:', e);
   }
 
-  // 2. Ensure Current User is in the list
-  if (currentUserName) {
-    const existing = membersMap.get(currentUserName);
-    if (!existing) {
-      membersMap.set(currentUserName, {
-        name: currentUserName,
-        count: 0,
-        userId: currentUserId,
-        isAdmin: Boolean(ownerId && currentUserId && ownerId === currentUserId)
-      });
-    }
+  // 2. Ensure current user is in the list
+  if (currentUserName && !membersMap.has(currentUserName)) {
+    membersMap.set(currentUserName, {
+      name: currentUserName,
+      count: 0,
+      userId: currentUserId,
+      isAdmin: Boolean(ownerId && currentUserId && ownerId === currentUserId)
+    });
   }
 
   // 3. Count photos by member
@@ -446,19 +402,13 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
       const name = data.authorName || 'Учасник';
       const userId = data.userId || '';
       const isAdm = Boolean(ownerId && userId && userId === ownerId);
-
       const existing = membersMap.get(name);
       if (existing) {
         existing.count += 1;
         if (userId) existing.userId = userId;
         if (isAdm) existing.isAdmin = true;
       } else {
-        membersMap.set(name, {
-          name,
-          count: 1,
-          userId,
-          isAdmin: isAdm
-        });
+        membersMap.set(name, { name, count: 1, userId, isAdmin: isAdm });
       }
     });
   } catch (err) {
@@ -470,8 +420,8 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
 
 /**
  * Real-time listener for group photos (triggers live notifications & map updates)
- * @param {string} groupCode 
- * @param {Function} onNewPhoto 
+ * @param {string} groupCode
+ * @param {Function} onNewPhoto
  * @param {Function} onPhotoRemoved
  * @returns {Function} Unsubscribe function
  */
@@ -486,43 +436,31 @@ export function subscribeToGroupUpdates(groupCode, onNewPhoto, onPhotoRemoved) {
     limit(100)
   );
 
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    if (isFirstLoad) {
-      isFirstLoad = false;
-      const initialPhotos = [];
-      snapshot.forEach((docSnap) => initialPhotos.push({ id: docSnap.id, ...docSnap.data() }));
-      geoService.addPhotosToCache(initialPhotos);
-      if (typeof onNewPhoto === 'function') {
-        onNewPhoto(null, initialPhotos);
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      if (isFirstLoad) {
+        isFirstLoad = false;
+        const initialPhotos = [];
+        snapshot.forEach((docSnap) => initialPhotos.push({ id: docSnap.id, ...docSnap.data() }));
+        geoService.addPhotosToCache(initialPhotos);
+        if (typeof onNewPhoto === 'function') onNewPhoto(null, initialPhotos);
+        return;
       }
-      return;
-    }
 
-    snapshot.docChanges().forEach((change) => {
-      if (change.type === 'added') {
+      snapshot.docChanges().forEach((change) => {
         const photo = { id: change.doc.id, ...change.doc.data() };
-        geoService.addPhotosToCache([photo]);
-        if (typeof onNewPhoto === 'function') {
-          onNewPhoto(photo);
+        if (change.type === 'added' || change.type === 'modified') {
+          geoService.addPhotosToCache([photo]);
+          if (typeof onNewPhoto === 'function') onNewPhoto(photo);
+        } else if (change.type === 'removed') {
+          geoService.cache.delete(change.doc.id);
+          if (typeof onPhotoRemoved === 'function') onPhotoRemoved(change.doc.id);
         }
-      } else if (change.type === 'modified') {
-        const photo = { id: change.doc.id, ...change.doc.data() };
-        geoService.addPhotosToCache([photo]);
-        if (typeof onNewPhoto === 'function') {
-          onNewPhoto(photo);
-        }
-      } else if (change.type === 'removed') {
-        geoService.cache.delete(change.doc.id);
-        if (typeof onPhotoRemoved === 'function') {
-          onPhotoRemoved(change.doc.id);
-        }
-      }
-    });
-  }, (err) => {
-    console.warn('Group subscription error:', err);
-  });
-
-  return unsubscribe;
+      });
+    },
+    (err) => { console.warn('Group subscription error:', err); }
+  );
 }
 
 /**
@@ -531,7 +469,6 @@ export function subscribeToGroupUpdates(groupCode, onNewPhoto, onPhotoRemoved) {
 export async function updatePhotoDocument(photoId, fieldsToUpdate) {
   if (!photoId) return false;
 
-  // Clean groupCode if provided
   const cleanFields = { ...fieldsToUpdate };
   if ('groupCode' in cleanFields) {
     cleanFields.groupCode = cleanFields.groupCode ? sanitizeGroupTag(cleanFields.groupCode) : null;
@@ -548,9 +485,7 @@ export async function updatePhotoDocument(photoId, fieldsToUpdate) {
 
   // Update client cache
   const cached = geoService.cache.get(photoId);
-  if (cached) {
-    Object.assign(cached, cleanFields);
-  }
+  if (cached) Object.assign(cached, cleanFields);
   return true;
 }
 
@@ -558,26 +493,22 @@ export async function updatePhotoDocument(photoId, fieldsToUpdate) {
  * Fetch all photos uploaded by a specific user
  */
 export async function fetchUserPhotos(userId) {
+  if (!userId) return [];
   const userPhotos = [];
-  if (!userId) return userPhotos;
 
-  // 1. Check client cache first
+  // Check client cache first
   geoService.cache.forEach((photo) => {
-    if (photo.userId === userId) {
-      userPhotos.push(photo);
-    }
+    if (photo.userId === userId) userPhotos.push(photo);
   });
 
-  // 2. Fetch from Firestore
+  // Fetch from Firestore (dedup)
   if (db) {
     try {
       const q = query(collection(db, 'photos'), where('userId', '==', userId), limit(100));
       const snapshot = await getDocs(q);
       snapshot.forEach((docSnap) => {
         const data = { id: docSnap.id, ...docSnap.data() };
-        if (!userPhotos.some(p => p.id === data.id)) {
-          userPhotos.push(data);
-        }
+        if (!userPhotos.some(p => p.id === data.id)) userPhotos.push(data);
       });
     } catch (err) {
       console.warn('Error fetching user photos:', err);
@@ -588,17 +519,16 @@ export async function fetchUserPhotos(userId) {
 }
 
 /**
- * Delete a photo document
+ * Delete a photo document from Firestore and cache
  */
 export async function deletePhoto(photo) {
-  if (!db) {
-    geoService.cache.delete(photo.id);
-    return true;
-  }
-
-  const photoRef = doc(db, 'photos', photo.id);
-  await deleteDoc(photoRef);
+  if (!photo || !photo.id) return false;
   geoService.cache.delete(photo.id);
+
+  if (db) {
+    const photoRef = doc(db, 'photos', photo.id);
+    await deleteDoc(photoRef);
+  }
   return true;
 }
 

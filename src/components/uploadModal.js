@@ -5,7 +5,7 @@
 import { extractExifGps, processImageClientSide } from '../services/imageProcessor.js';
 import { uploadPhotoBlobs, savePhotoDocument } from '../services/firebase.js';
 import { getCurrentUserId, getCurrentDisplayName, ensureAuthenticatedUser, isGoogleUser } from '../services/authService.js';
-import { getActiveGroupCode } from '../services/groupService.js';
+import { getActiveGroupCode, sanitizeGroupTag } from '../services/groupService.js';
 import { geoService } from '../services/geoService.js';
 import { startManualLocationPicker, renderMapMarkers, flyToCoords } from './map.js';
 import { showToast } from '../utils/toast.js';

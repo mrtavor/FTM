@@ -1,16 +1,21 @@
 /**
  * Toast Notification Utility
+ * Max 3 simultaneous toasts to prevent screen overflow on mobile
  */
+
+const MAX_TOASTS = 3;
 
 export function showToast(message, type = 'info', duration = 3500) {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
-  const icons = {
-    info: 'ℹ️',
-    success: '✅',
-    error: '⚠️'
-  };
+  // Remove oldest toast if over limit
+  const existing = container.querySelectorAll('.toast');
+  if (existing.length >= MAX_TOASTS) {
+    existing[0].remove();
+  }
+
+  const icons = { info: 'ℹ️', success: '✅', error: '⚠️' };
 
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
