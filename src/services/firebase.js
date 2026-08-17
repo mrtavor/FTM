@@ -154,8 +154,78 @@ export async function fetchPhotosForGeohashes(geohashes) {
   return results;
 }
 
+import { onSnapshot } from 'firebase/firestore';
+
 /**
- * Delete a photo document and its storage files
+ * Fetch list of active members in a group with photo counts
+ * @param {string} groupCode 
+ * @returns {Promise<Array<{name: string, count: number}>>}
+ */
+export async function fetchGroupMembers(groupCode) {
+  if (!db || !groupCode) return [];
+  try {
+    const q = query(collection(db, 'photos'), where('groupCode', '==', groupCode), limit(100));
+    const snapshot = await getDocs(q);
+    const membersMap = new Map();
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      const name = data.authorName || 'Учасник';
+      const current = membersMap.get(name) || { name, count: 0 };
+      current.count += 1;
+      membersMap.set(name, current);
+    });
+
+    return Array.from(membersMap.values());
+  } catch (err) {
+    console.warn('Error fetching group members:', err);
+    return [];
+  }
+}
+
+/**
+ * Real-time listener for new group photos (triggers live notifications)
+ * @param {string} groupCode 
+ * @param {Function} onNewPhoto 
+ * @returns {Function} Unsubscribe function
+ */
+export function subscribeToGroupUpdates(groupCode, onNewPhoto) {
+  if (!db || !groupCode) return () => {};
+
+  let isFirstLoad = true;
+  const q = query(
+    collection(db, 'photos'),
+    where('groupCode', '==', groupCode),
+    limit(50)
+  );
+
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    if (isFirstLoad) {
+      isFirstLoad = false;
+      const initialPhotos = [];
+      snapshot.forEach((docSnap) => initialPhotos.push({ id: docSnap.id, ...docSnap.data() }));
+      geoService.addPhotosToCache(initialPhotos);
+      return;
+    }
+
+    snapshot.docChanges().forEach((change) => {
+      if (change.type === 'added') {
+        const photo = { id: change.doc.id, ...change.doc.data() };
+        geoService.addPhotosToCache([photo]);
+        if (typeof onNewPhoto === 'function') {
+          onNewPhoto(photo);
+        }
+      }
+    });
+  }, (err) => {
+    console.warn('Group subscription error:', err);
+  });
+
+  return unsubscribe;
+}
+
+/**
+ * Delete a photo document
  */
 export async function deletePhoto(photo) {
   if (!db) {
@@ -163,20 +233,8 @@ export async function deletePhoto(photo) {
     return true;
   }
 
-  // Delete from Firestore
   const photoRef = doc(db, 'photos', photo.id);
   await deleteDoc(photoRef);
-
-  // Delete from Storage if possible
-  if (storage) {
-    if (photo.mainUrl && photo.mainUrl.includes('firebasestorage')) {
-      try {
-        const mainRef = ref(storage, `photos/${photo.userId}/${photo.id}_main.webp`);
-        await deleteObject(mainRef);
-      } catch (e) { /* ignore storage clean fail */ }
-    }
-  }
-
   geoService.cache.delete(photo.id);
   return true;
 }

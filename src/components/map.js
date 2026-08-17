@@ -1,14 +1,15 @@
 /**
- * Map Component (Leaflet.js + MarkerCluster)
+ * High-Performance Optimized Map Component (Leaflet.js + MarkerCluster)
  * Dynamic zoom rendering:
- * - Zoom <= 10: Clusters (Leaflet.markercluster)
+ * - Zoom <= 10: Smooth Clusters
  * - Zoom 11-14: Custom Emoji Pins
  * - Zoom >= 15: Photo Micro-Thumbnails
  */
 import L from 'leaflet';
 import 'leaflet.markercluster';
 import { geoService } from '../services/geoService.js';
-import { fetchPhotosForGeohashes } from '../services/firebase.js';
+import { fetchPhotosForGeohashes, subscribeToGroupUpdates } from '../services/firebase.js';
+import { getActiveGroupCode, getFilterMode, onGroupChange, notifyNewGroupPhoto } from '../services/groupService.js';
 import { openPhotoDetailModal } from './photoDetailModal.js';
 import { showToast } from '../utils/toast.js';
 
@@ -18,42 +19,46 @@ let singleMarkersLayer = null;
 let isPickerActive = false;
 let onLocationSelectedCallback = null;
 let debounceTimer = null;
+let groupUnsubscribe = null;
 
-// Default map view: Center of Ukraine / Europe view
 const DEFAULT_CENTER = [48.3794, 31.1656];
 const DEFAULT_ZOOM = 6;
 
 /**
- * Initialize Leaflet Map
+ * Initialize Leaflet Map with optimized tile caching
  */
 export function initMap(containerId = 'map') {
   if (mapInstance) return mapInstance;
 
-  // Initialize Map with smooth wheel zoom and attribution
   mapInstance = L.map(containerId, {
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
     minZoom: 3,
     maxZoom: 19,
-    zoomControl: false // Using custom controls
+    zoomControl: false,
+    preferCanvas: true
   });
 
-  // Soft Eye-Care CartoDB Positron TileLayer
+  // Fast Eye-Care CartoDB Voyager TileLayer with pre-buffering
   const tileLayer = L.tileLayer(
     'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
     {
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>, &copy; OSM',
       subdomains: 'abcd',
-      maxZoom: 20
+      maxZoom: 20,
+      keepBuffer: 6,
+      updateInterval: 120
     }
   );
   tileLayer.addTo(mapInstance);
 
-  // Initialize Cluster Layer with custom styling
+  // Cluster Layer
   clusterGroup = L.markerClusterGroup({
     showCoverageOnHover: false,
-    maxClusterRadius: 50,
+    maxClusterRadius: 45,
     spiderfyOnMaxZoom: true,
+    chunkedLoading: true,
+    chunkInterval: 100,
     iconCreateFunction: (cluster) => {
       const count = cluster.getChildCount();
       let sizeClass = '';
@@ -70,21 +75,36 @@ export function initMap(containerId = 'map') {
   });
 
   singleMarkersLayer = L.layerGroup();
-
   mapInstance.addLayer(clusterGroup);
   mapInstance.addLayer(singleMarkersLayer);
 
-  // Listen to map movements & zoom level changes
   mapInstance.on('moveend zoomend', handleMapViewportChange);
 
-  // Initial load
+  // Setup real-time listener for current group
+  onGroupChange(({ activeGroupCode }) => {
+    if (groupUnsubscribe) {
+      groupUnsubscribe();
+      groupUnsubscribe = null;
+    }
+
+    if (activeGroupCode) {
+      groupUnsubscribe = subscribeToGroupUpdates(activeGroupCode, (newPhoto) => {
+        notifyNewGroupPhoto(newPhoto, (lat, lng) => {
+          flyToCoords(lat, lng, 15);
+        });
+        renderMapMarkers();
+      });
+    }
+    renderMapMarkers();
+  });
+
   handleMapViewportChange();
 
   return mapInstance;
 }
 
 /**
- * Handle viewport move/zoom event with debounce to prevent extra queries
+ * Handle viewport move/zoom event with debounce
  */
 async function handleMapViewportChange() {
   if (!mapInstance) return;
@@ -94,22 +114,17 @@ async function handleMapViewportChange() {
     const bounds = mapInstance.getBounds();
     const zoom = mapInstance.getZoom();
 
-    // 1. Find uncached geohash cells in current viewport
     const uncachedHashes = geoService.getUncachedGeohashes(bounds, zoom);
 
     if (uncachedHashes.length > 0) {
-      // Fetch only for new geohashes
       const newPhotos = await fetchPhotosForGeohashes(uncachedHashes);
       geoService.addPhotosToCache(newPhotos);
       geoService.markGeohashesQueried(uncachedHashes);
     }
 
-    // 2. Render all visible points from in-memory cache according to zoom level
     renderMapMarkers();
-  }, 220);
+  }, 180);
 }
-
-import { getActiveGroupCode, getFilterMode, onGroupChange } from '../services/groupService.js';
 
 /**
  * Re-render markers depending on current zoom level and active group filter
@@ -124,12 +139,10 @@ export function renderMapMarkers() {
   const activeGroup = getActiveGroupCode();
   const filterMode = getFilterMode();
 
-  // Filter photos based on group mode
   const visiblePhotos = allVisiblePhotos.filter((photo) => {
     if (filterMode === 'group' && activeGroup) {
       return photo.groupCode === activeGroup;
     }
-    // 'all' mode: show public photos + current group photos
     if (!photo.groupCode) return true;
     return photo.groupCode === activeGroup;
   });
@@ -138,17 +151,14 @@ export function renderMapMarkers() {
   singleMarkersLayer.clearLayers();
 
   if (currentZoom <= 10) {
-    // Zoom Out: Use Marker Clusters
     const markers = visiblePhotos.map((photo) => createMarkerForPhoto(photo, 'emoji'));
     clusterGroup.addLayers(markers);
   } else if (currentZoom >= 11 && currentZoom <= 14) {
-    // Medium Zoom: Use Custom Emoji Pins
     visiblePhotos.forEach((photo) => {
       const marker = createMarkerForPhoto(photo, 'emoji');
       singleMarkersLayer.addLayer(marker);
     });
   } else {
-    // Zoom In (>= 15): Use Photo Micro-Thumbnail Pins
     visiblePhotos.forEach((photo) => {
       const marker = createMarkerForPhoto(photo, 'thumb');
       singleMarkersLayer.addLayer(marker);
@@ -158,8 +168,6 @@ export function renderMapMarkers() {
 
 /**
  * Create Leaflet Marker with Custom DivIcon
- * @param {Object} photo 
- * @param {'emoji'|'thumb'} styleType 
  */
 function createMarkerForPhoto(photo, styleType = 'emoji') {
   let iconHtml = '';
@@ -169,7 +177,7 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
   if (styleType === 'thumb' && photo.thumbUrl) {
     iconHtml = `
       <div class="thumb-pin-container">
-        <img class="thumb-pin-image" src="${photo.thumbUrl}" alt="${photo.description || 'Фото'}" loading="lazy" />
+        <img class="thumb-pin-image" src="${photo.thumbUrl}" alt="Фото" loading="lazy" />
         <span class="thumb-pin-badge">${photo.emoji || '📸'}</span>
       </div>
     `;
@@ -193,7 +201,6 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
 
   const marker = L.marker([photo.lat, photo.lng], { icon: customIcon });
 
-  // On Click -> Open Photo Detail Modal
   marker.on('click', () => {
     openPhotoDetailModal(photo);
   });
@@ -201,37 +208,30 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
   return marker;
 }
 
-/**
- * Center map on user's current GPS location
- */
 export function locateUser() {
   if (!mapInstance) return;
 
   if (!navigator.geolocation) {
-    showToast('Геолокація не підтримується цим браузером', 'error');
+    showToast('Геолокація недоступна', 'error');
     return;
   }
 
-  showToast('Визначення вашого місцезнаходження...', 'info', 2000);
+  showToast('Визначення вашого місця...', 'info', 1500);
 
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
-      mapInstance.flyTo([lat, lng], 14, { duration: 1.5 });
+      mapInstance.flyTo([lat, lng], 14, { duration: 1.4 });
       showToast('Локацію знайдено!', 'success');
     },
     (err) => {
-      console.warn('Geolocation error:', err);
-      showToast('Не вдалося отримати геолокацію. Перевірте дозволи браузера.', 'error');
+      showToast('Не вдалося отримати GPS. Перевірте дозволи геоданих.', 'error');
     },
-    { enableHighAccuracy: true, timeout: 10000 }
+    { enableHighAccuracy: true, timeout: 8000 }
   );
 }
 
-/**
- * Manual Pin / Crosshair Picker Mode
- */
 export function startManualLocationPicker(onConfirmed) {
   isPickerActive = true;
   onLocationSelectedCallback = onConfirmed;
@@ -261,9 +261,6 @@ export function stopManualLocationPicker() {
   if (crosshair) crosshair.classList.add('hidden');
 }
 
-/**
- * Fly map to coordinates
- */
 export function flyToCoords(lat, lng, zoom = 15) {
   if (mapInstance) {
     mapInstance.flyTo([lat, lng], zoom, { duration: 1.2 });
