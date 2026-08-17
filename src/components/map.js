@@ -98,10 +98,20 @@ export function initMap(containerId = 'map') {
       // 1. Photos real-time sync (instant pin add/remove)
       groupUnsubscribe = subscribeToGroupUpdates(
         activeGroupCode,
-        (newPhoto) => {
-          notifyNewGroupPhoto(newPhoto, (lat, lng) => {
-            flyToCoords(lat, lng, 15);
-          });
+        (newPhoto, initialPhotos) => {
+          if (newPhoto) {
+            notifyNewGroupPhoto(newPhoto, (lat, lng) => {
+              flyToCoords(lat, lng, 15);
+            });
+          } else if (Array.isArray(initialPhotos) && initialPhotos.length > 0) {
+            // Auto focus on group photos if map is at default view
+            if (mapInstance.getZoom() <= 7) {
+              const bounds = L.latLngBounds(initialPhotos.map(p => [p.lat, p.lng]));
+              if (bounds.isValid()) {
+                mapInstance.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+              }
+            }
+          }
           renderMapMarkers();
         },
         (removedPhotoId) => {
@@ -183,18 +193,26 @@ export function renderMapMarkers() {
 
   const currentZoom = mapInstance.getZoom();
   const bounds = mapInstance.getBounds();
-  const allVisiblePhotos = geoService.getCachedPhotosInBounds(bounds);
-
   const activeGroup = getActiveGroupCode();
   const filterMode = getFilterMode();
 
-  const visiblePhotos = allVisiblePhotos.filter((photo) => {
-    if (filterMode === 'group' && activeGroup) {
-      return photo.groupCode === activeGroup;
+  let visiblePhotos = [];
+
+  if (filterMode === 'group' && activeGroup) {
+    // In group mode: render all photos belonging to the group from cache
+    for (const photo of geoService.cache.values()) {
+      if (photo.groupCode === activeGroup) {
+        visiblePhotos.push(photo);
+      }
     }
-    if (!photo.groupCode) return true;
-    return photo.groupCode === activeGroup;
-  });
+  } else {
+    // In public / all photos mode: render photos in current viewport
+    const allVisiblePhotos = geoService.getCachedPhotosInBounds(bounds);
+    visiblePhotos = allVisiblePhotos.filter((photo) => {
+      if (!photo.groupCode) return true;
+      return photo.groupCode === activeGroup;
+    });
+  }
 
   clusterGroup.clearLayers();
   singleMarkersLayer.clearLayers();

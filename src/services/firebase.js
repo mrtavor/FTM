@@ -470,6 +470,9 @@ export function subscribeToGroupUpdates(groupCode, onNewPhoto, onPhotoRemoved) {
       const initialPhotos = [];
       snapshot.forEach((docSnap) => initialPhotos.push({ id: docSnap.id, ...docSnap.data() }));
       geoService.addPhotosToCache(initialPhotos);
+      if (typeof onNewPhoto === 'function') {
+        onNewPhoto(null, initialPhotos);
+      }
       return;
     }
 
