@@ -433,6 +433,68 @@ export function subscribeToGroupUpdates(groupCode, onNewPhoto, onPhotoRemoved) {
 }
 
 /**
+ * Update Photo Metadata (Description, Emoji, Group Code / Visibility)
+ */
+export async function updatePhotoDocument(photoId, fieldsToUpdate) {
+  if (!photoId) return false;
+
+  // Clean groupCode if provided
+  const cleanFields = { ...fieldsToUpdate };
+  if ('groupCode' in cleanFields) {
+    cleanFields.groupCode = cleanFields.groupCode ? sanitizeGroupTag(cleanFields.groupCode) : null;
+  }
+
+  if (db) {
+    try {
+      const photoRef = doc(db, 'photos', photoId);
+      await setDoc(photoRef, cleanFields, { merge: true });
+    } catch (err) {
+      console.warn('Update photo in firestore error:', err);
+    }
+  }
+
+  // Update client cache
+  const cached = geoService.cache.get(photoId);
+  if (cached) {
+    Object.assign(cached, cleanFields);
+  }
+  return true;
+}
+
+/**
+ * Fetch all photos uploaded by a specific user
+ */
+export async function fetchUserPhotos(userId) {
+  const userPhotos = [];
+  if (!userId) return userPhotos;
+
+  // 1. Check client cache first
+  geoService.cache.forEach((photo) => {
+    if (photo.userId === userId) {
+      userPhotos.push(photo);
+    }
+  });
+
+  // 2. Fetch from Firestore
+  if (db) {
+    try {
+      const q = query(collection(db, 'photos'), where('userId', '==', userId), limit(100));
+      const snapshot = await getDocs(q);
+      snapshot.forEach((docSnap) => {
+        const data = { id: docSnap.id, ...docSnap.data() };
+        if (!userPhotos.some(p => p.id === data.id)) {
+          userPhotos.push(data);
+        }
+      });
+    } catch (err) {
+      console.warn('Error fetching user photos:', err);
+    }
+  }
+
+  return userPhotos;
+}
+
+/**
  * Delete a photo document
  */
 export async function deletePhoto(photo) {

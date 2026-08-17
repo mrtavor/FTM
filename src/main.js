@@ -8,6 +8,7 @@ import { initMap, locateUser, renderMapMarkers, getMapInstance } from './compone
 import { openUploadModal } from './components/uploadModal.js';
 import { openProfileModal, updateHeaderNickDisplay } from './components/profileModal.js';
 import { openFriendsModal, updateHeaderGroupBadge } from './components/friendsModal.js';
+import { openGalleryModal } from './components/galleryModal.js';
 import { loadSampleLocations } from './utils/mockData.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -55,6 +56,11 @@ function setupNavigationAndControls() {
   }
 
   // Header Actions
+  const btnGallery = document.getElementById('btn-gallery');
+  if (btnGallery) {
+    btnGallery.onclick = () => openGalleryModal();
+  }
+
   const btnFriends = document.getElementById('btn-friends');
   if (btnFriends) {
     btnFriends.onclick = () => openFriendsModal();
@@ -78,8 +84,18 @@ function setupNavigationAndControls() {
     };
   }
 
+  const navGallery = document.getElementById('nav-btn-gallery');
+  if (navGallery) {
+    navGallery.onclick = () => openGalleryModal();
+  }
+
   const navFriendsBottom = document.getElementById('nav-btn-friends-bottom');
   if (navFriendsBottom) {
     navFriendsBottom.onclick = () => openFriendsModal();
+  }
+
+  const navProfileBottom = document.getElementById('nav-btn-profile-bottom');
+  if (navProfileBottom) {
+    navProfileBottom.onclick = () => openProfileModal();
   }
 }
