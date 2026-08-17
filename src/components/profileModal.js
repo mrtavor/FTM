@@ -10,7 +10,6 @@ import {
   logoutUser
 } from '../services/authService.js';
 import { updateHeaderGroupBadge } from './friendsModal.js';
-import { openGalleryModal } from './galleryModal.js';
 import { showToast } from '../utils/toast.js';
 
 export function openProfileModal() {
@@ -44,21 +43,13 @@ export function openProfileModal() {
             </div>
           </div>
 
-          <!-- My Photos Gallery Shortcut -->
-          <div>
-            <button type="button" id="btn-profile-open-gallery" class="btn-secondary" style="width: 100%; padding: 11px; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
-              <span>🖼️</span>
-              <span>Моя галерея опублікованих фото</span>
-            </button>
-          </div>
-
           <!-- Google Account Card -->
           <div style="border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md);">
             ${!isGoogle ? `
               <div style="margin-bottom: 12px;">
                 <span style="font-weight: 700; font-size: 14px; display: block; margin-bottom: 4px;">Вхід через Google</span>
                 <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
-                  Увійдіть через Google, щоб розблокувати створення груп друзів та зберегти свої локації.
+                  Увійдіть через Google, щоб створювати групи друзів та безпечно зберігати свої локації.
                 </p>
               </div>
 
@@ -110,14 +101,6 @@ function attachProfileEvents() {
   backdrop.onclick = (e) => {
     if (e.target === backdrop) close();
   };
-
-  const btnProfileGallery = document.getElementById('btn-profile-open-gallery');
-  if (btnProfileGallery) {
-    btnProfileGallery.onclick = () => {
-      close();
-      openGalleryModal();
-    };
-  }
 
   if (btnSaveNick && inputNick) {
     btnSaveNick.onclick = async () => {
