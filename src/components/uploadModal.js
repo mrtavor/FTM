@@ -8,7 +8,7 @@
  */
 import { extractExifGps, processImageClientSide, formatBytes } from '../services/imageProcessor.js';
 import { uploadPhotoBlobs, savePhotoDocument } from '../services/firebase.js';
-import { getCurrentUserId } from '../services/authService.js';
+import { getCurrentUserId, getCurrentDisplayName } from '../services/authService.js';
 import { geoService } from '../services/geoService.js';
 import { startManualLocationPicker, renderMapMarkers, flyToCoords } from './map.js';
 import { showToast } from '../utils/toast.js';
@@ -373,6 +373,7 @@ async function handleUploadSubmit() {
       emoji: selectedEmoji,
       mainUrl: storageUrls.mainUrl,
       thumbUrl: storageUrls.thumbUrl,
+      authorName: getCurrentDisplayName(),
       userId: userId
     };
 

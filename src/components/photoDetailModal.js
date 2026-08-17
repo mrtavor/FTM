@@ -38,6 +38,7 @@ export function openPhotoDetailModal(photo) {
             <div class="photo-detail-desc">${photo.description || 'Без опису'}</div>
             
             <div class="photo-detail-info-row">
+              <span>👤 ${photo.authorName || 'Мандрівник'}</span>
               <span>📅 ${formattedDate}</span>
               <span>📍 <a href="https://www.google.com/maps?q=${photo.lat},${photo.lng}" target="_blank" rel="noopener" style="color: var(--accent-terracotta); text-decoration: none;">Google Maps ↗</a></span>
             </div>

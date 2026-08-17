@@ -8,6 +8,7 @@ import { initMap, locateUser, renderMapMarkers, getMapInstance } from './compone
 import { openUploadModal } from './components/uploadModal.js';
 import { openSettingsModal } from './components/settingsModal.js';
 import { openInfoModal } from './components/infoModal.js';
+import { openProfileModal, updateHeaderNickDisplay } from './components/profileModal.js';
 import { loadSampleLocations } from './utils/mockData.js';
 import { showToast } from './utils/toast.js';
 import { isConfigured } from './utils/config.js';
@@ -17,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 1. Initialize Firebase & Authentication
   const { auth, isMock } = initFirebase();
   initAuth(auth);
+  updateHeaderNickDisplay();
 
   // 2. Initialize Leaflet Map
   const map = initMap('map');
@@ -69,6 +71,11 @@ function setupNavigationAndControls() {
   }
 
   // Header Actions
+  const btnProfile = document.getElementById('btn-profile');
+  if (btnProfile) {
+    btnProfile.onclick = () => openProfileModal();
+  }
+
   const btnSettings = document.getElementById('btn-settings');
   if (btnSettings) {
     btnSettings.onclick = () => openSettingsModal();

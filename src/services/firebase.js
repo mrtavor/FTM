@@ -123,6 +123,7 @@ export async function savePhotoDocument(photoData) {
     emoji: photoData.emoji || '📸',
     mainUrl: photoData.mainUrl,
     thumbUrl: photoData.thumbUrl,
+    authorName: photoData.authorName || 'Мандрівник',
     userId: photoData.userId,
     createdAt: serverTimestamp()
   };
