@@ -4,6 +4,7 @@
  */
 import {
   getCurrentUser,
+  getCurrentUserId,
   getCurrentDisplayName,
   setDisplayNickname,
   isGoogleUser,
@@ -11,6 +12,8 @@ import {
   logoutUser
 } from '../services/authService.js';
 import { COUNTRIES, getUserCountry, setUserCountry } from '../services/countryService.js';
+import { getActiveGroupCode } from '../services/groupService.js';
+import { registerGroupMember } from '../services/firebase.js';
 import { updateHeaderGroupBadge } from './friendsModal.js';
 import { flyToCoords } from './map.js';
 import { showToast } from '../utils/toast.js';
@@ -160,6 +163,10 @@ function attachProfileEvents() {
         return;
       }
       await setDisplayNickname(val);
+      const activeGroup = getActiveGroupCode();
+      if (activeGroup) {
+        await registerGroupMember(activeGroup, { uid: getCurrentUserId(), name: val });
+      }
       showToast(`Ім'я збережено: ${val} ✨`, 'success');
       updateHeaderNickDisplay();
     };

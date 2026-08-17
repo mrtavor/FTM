@@ -308,7 +308,7 @@ export function subscribeToGroupMetadata(groupTag, onUpdate) {
 }
 
 /**
- * Register user in group members list
+ * Register user in group members list (updates existing member if already registered)
  */
 export async function registerGroupMember(groupCode, memberObj) {
   if (!db || !groupCode || !memberObj) return;
@@ -321,15 +321,36 @@ export async function registerGroupMember(groupCode, memberObj) {
     if (snap.exists()) {
       const data = snap.data();
       const members = Array.isArray(data.members) ? [...data.members] : [];
-      const exists = members.some(m => m.name === memberObj.name || (memberObj.uid && m.uid === memberObj.uid));
-      if (!exists) {
+      const newName = memberObj.name || 'Учасник';
+      const uid = memberObj.uid || '';
+
+      // Match by UID first, or name if no UID
+      const existingIdx = members.findIndex(m => (uid && m.uid === uid) || (!m.uid && m.name === newName));
+
+      const isOwner = Boolean(data.ownerId && uid && data.ownerId === uid);
+      const updatePayload = {};
+
+      if (existingIdx >= 0) {
+        members[existingIdx] = {
+          ...members[existingIdx],
+          name: newName,
+          uid: uid || members[existingIdx].uid || ''
+        };
+        updatePayload.members = members;
+      } else {
         members.push({
-          uid: memberObj.uid || '',
-          name: memberObj.name || 'Учасник',
+          uid: uid,
+          name: newName,
           joinedAt: new Date().toISOString()
         });
-        await setDoc(groupRef, { members }, { merge: true });
+        updatePayload.members = members;
       }
+
+      if (isOwner) {
+        updatePayload.adminName = newName;
+      }
+
+      await setDoc(groupRef, updatePayload, { merge: true });
     }
   } catch (err) {
     console.warn('Register group member error:', err);
@@ -337,18 +358,31 @@ export async function registerGroupMember(groupCode, memberObj) {
 }
 
 /**
- * Fetch list of active members in a group with photo counts
+ * Fetch list of active members in a group with photo counts, strictly deduplicated by userId/UID
  */
 export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName = '', currentUserId = '') {
   const cleanTag = sanitizeGroupTag(groupCode);
-  const membersMap = new Map();
+  const membersMap = new Map(); // Key: `uid:${userId}` or `name:${name}`
+
+  const getMemberKey = (uid, name) => {
+    if (uid && uid.trim()) return `uid:${uid.trim()}`;
+    return `name:${(name || '').trim().toLowerCase()}`;
+  };
 
   if (!db || !cleanTag) {
     if (currentUserName) {
-      membersMap.set(currentUserName, { name: currentUserName, count: 0, userId: currentUserId, isAdmin: true });
+      const key = getMemberKey(currentUserId, currentUserName);
+      membersMap.set(key, {
+        name: currentUserName,
+        count: 0,
+        userId: currentUserId,
+        isAdmin: true
+      });
     }
     return Array.from(membersMap.values());
   }
+
+  let realOwnerId = ownerId;
 
   // 1. Load group doc to get owner and registered members
   try {
@@ -356,26 +390,43 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
     const groupSnap = await getDoc(groupRef);
     if (groupSnap.exists()) {
       const groupData = groupSnap.data();
-      const realOwnerId = groupData.ownerId || ownerId;
+      realOwnerId = groupData.ownerId || ownerId;
 
-      if (groupData.adminName) {
-        membersMap.set(groupData.adminName, {
-          name: groupData.adminName,
+      // Group creator / admin
+      if (realOwnerId || groupData.adminName) {
+        const isAdminCurrentUser = Boolean(realOwnerId && currentUserId && realOwnerId === currentUserId);
+        const adminDisplayName = isAdminCurrentUser ? currentUserName : (groupData.adminName || 'Адміністратор');
+        const adminKey = getMemberKey(realOwnerId, adminDisplayName);
+
+        membersMap.set(adminKey, {
+          name: adminDisplayName,
           count: 0,
-          userId: realOwnerId,
+          userId: realOwnerId || '',
           isAdmin: true
         });
       }
 
+      // Process registered members
       const registeredMembers = Array.isArray(groupData.members) ? groupData.members : [];
       registeredMembers.forEach(m => {
+        if (!m) return;
+        const isCurrentUser = Boolean(currentUserId && m.uid && m.uid === currentUserId);
+        const displayName = isCurrentUser ? (currentUserName || m.name) : (m.name || 'Учасник');
         const isAdm = Boolean(realOwnerId && m.uid && m.uid === realOwnerId);
-        const existing = membersMap.get(m.name);
+        const key = getMemberKey(m.uid, displayName);
+
+        const existing = membersMap.get(key);
         if (existing) {
+          existing.name = displayName;
           if (m.uid) existing.userId = m.uid;
-          existing.isAdmin = isAdm || existing.isAdmin;
+          if (isAdm) existing.isAdmin = true;
         } else {
-          membersMap.set(m.name, { name: m.name, count: 0, userId: m.uid || '', isAdmin: isAdm });
+          membersMap.set(key, {
+            name: displayName,
+            count: 0,
+            userId: m.uid || '',
+            isAdmin: isAdm
+          });
         }
       });
     }
@@ -383,32 +434,57 @@ export async function fetchGroupMembers(groupCode, ownerId = '', currentUserName
     console.warn('Error reading group doc members:', e);
   }
 
-  // 2. Ensure current user is in the list
-  if (currentUserName && !membersMap.has(currentUserName)) {
-    membersMap.set(currentUserName, {
-      name: currentUserName,
-      count: 0,
-      userId: currentUserId,
-      isAdmin: Boolean(ownerId && currentUserId && ownerId === currentUserId)
-    });
+  // 2. Ensure current user is in the list with latest display name
+  if (currentUserName || currentUserId) {
+    const isAdm = Boolean(realOwnerId && currentUserId && realOwnerId === currentUserId);
+    const key = getMemberKey(currentUserId, currentUserName);
+    const existing = membersMap.get(key);
+    if (existing) {
+      existing.name = currentUserName || existing.name;
+      existing.userId = currentUserId || existing.userId;
+      if (isAdm) existing.isAdmin = true;
+    } else {
+      membersMap.set(key, {
+        name: currentUserName || 'Мандрівник',
+        count: 0,
+        userId: currentUserId || '',
+        isAdmin: isAdm
+      });
+    }
   }
 
-  // 3. Count photos by member
+  // 3. Count photos by member (mapping each photo to its corresponding member)
   try {
     const q = query(collection(db, 'photos'), where('groupCode', '==', cleanTag), limit(150));
     const snapshot = await getDocs(q);
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
-      const name = data.authorName || 'Учасник';
-      const userId = data.userId || '';
-      const isAdm = Boolean(ownerId && userId && userId === ownerId);
-      const existing = membersMap.get(name);
+      const photoUid = data.userId || '';
+      const photoAuthor = data.authorName || 'Учасник';
+      const isAdm = Boolean(realOwnerId && photoUid && photoUid === realOwnerId);
+
+      // Match by UID first, then by name
+      let targetKey = null;
+      if (photoUid && membersMap.has(`uid:${photoUid}`)) {
+        targetKey = `uid:${photoUid}`;
+      } else if (membersMap.has(`name:${photoAuthor.trim().toLowerCase()}`)) {
+        targetKey = `name:${photoAuthor.trim().toLowerCase()}`;
+      } else {
+        targetKey = getMemberKey(photoUid, photoAuthor);
+      }
+
+      const existing = membersMap.get(targetKey);
       if (existing) {
         existing.count += 1;
-        if (userId) existing.userId = userId;
+        if (photoUid && !existing.userId) existing.userId = photoUid;
         if (isAdm) existing.isAdmin = true;
       } else {
-        membersMap.set(name, { name, count: 1, userId, isAdmin: isAdm });
+        membersMap.set(targetKey, {
+          name: (currentUserId && photoUid === currentUserId) ? (currentUserName || photoAuthor) : photoAuthor,
+          count: 1,
+          userId: photoUid,
+          isAdmin: isAdm
+        });
       }
     });
   } catch (err) {
