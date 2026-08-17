@@ -55,11 +55,12 @@ export function initMap(containerId = 'map') {
   );
   tileLayer.addTo(mapInstance);
 
-  // Cluster Layer
+  // Cluster Layer with instant click handling on all zoom levels
   clusterGroup = L.markerClusterGroup({
     showCoverageOnHover: false,
-    maxClusterRadius: 45,
+    maxClusterRadius: 40,
     spiderfyOnMaxZoom: true,
+    zoomToBoundsOnClick: true,
     chunkedLoading: true,
     chunkInterval: 100,
     iconCreateFunction: (cluster) => {
@@ -74,6 +75,13 @@ export function initMap(containerId = 'map') {
         iconSize: L.point(44, 44),
         iconAnchor: [22, 22]
       });
+    }
+  });
+
+  // Handle direct click on unclustered markers inside cluster group
+  clusterGroup.on('click', (a) => {
+    if (a.layer && a.layer.photoData) {
+      openPhotoDetailModal(a.layer.photoData);
     }
   });
 
@@ -279,12 +287,15 @@ function createMarkerForPhoto(photo, styleType = 'emoji') {
   const marker = L.marker([photo.lat, photo.lng], {
     icon: customIcon,
     riseOnHover: true,
-    keyboard: true,
-    title: photo.description || 'Фото'
+    keyboard: true
   });
 
+  marker.photoData = photo;
+
   marker.on('click', (e) => {
-    L.DomEvent.stopPropagation(e);
+    if (e && e.originalEvent) {
+      L.DomEvent.stopPropagation(e);
+    }
     openPhotoDetailModal(photo);
   });
 

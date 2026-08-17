@@ -71,16 +71,12 @@
   flex-direction: column;
   align-items: center;
   cursor: pointer;
-  background: transparent !important;
-  border: none !important;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .custom-emoji-marker:hover {
-  z-index: 1000 !important;
-}
-
-.custom-emoji-marker:hover .emoji-pin-bubble {
   transform: translateY(-4px) scale(1.15);
+  z-index: 1000 !important;
 }
 
 .emoji-pin-bubble {
@@ -95,7 +91,6 @@
   box-shadow: var(--shadow-md);
   border: 2px solid var(--accent-primary);
   position: relative;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .emoji-pin-bubble::after {
@@ -119,16 +114,12 @@
   flex-direction: column;
   align-items: center;
   cursor: pointer;
-  background: transparent !important;
-  border: none !important;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .custom-thumb-marker:hover {
-  z-index: 1000 !important;
-}
-
-.custom-thumb-marker:hover .thumb-pin-container {
   transform: translateY(-6px) scale(1.12);
+  z-index: 1000 !important;
 }
 
 .thumb-pin-container {
@@ -141,7 +132,6 @@
   border: 2px solid #FFFFFF;
   position: relative;
   overflow: visible;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .thumb-pin-image {
