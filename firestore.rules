@@ -11,7 +11,18 @@ service cloud.firestore {
     match /photos/{photoId} {
       allow read, write: if true;
     }
+
+    // Лайки до фотографій
+    match /photo_likes/{likeId} {
+      allow read, write: if true;
+    }
+
+    // Коментарі до фотографій
+    match /photo_comments/{commentId} {
+      allow read, write: if true;
+    }
     
+    // Fallback для решти документів
     match /{document=**} {
       allow read, write: if true;
     }

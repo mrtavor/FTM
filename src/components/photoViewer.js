@@ -90,7 +90,7 @@ export function showPhotoViewer(photo, onChanged) {
   let likes = [];
   let comments = [];
   let isLiked = false;
-  let isLiking = false; // prevent double-tap race
+  let isLiking = false;
   let likesUnsub = null;
   let commentsUnsub = null;
 
@@ -98,6 +98,9 @@ export function showPhotoViewer(photo, onChanged) {
   const modal = document.createElement('div');
   modal.id = 'universal-photo-viewer';
   modal.className = 'pv-overlay';
+
+  // Append modal to body immediately so selectors and events always resolve
+  document.body.appendChild(modal);
 
   // ─── Render ──────────────────────────────────────
   function render() {
@@ -252,7 +255,6 @@ export function showPhotoViewer(photo, onChanged) {
     `;
 
     bindEvents();
-    // Re-hydrate reactions DOM with current state after innerHTML replacement
     refreshLikesUI();
     refreshCommentsUI();
   }
@@ -286,8 +288,8 @@ export function showPhotoViewer(photo, onChanged) {
 
   // ─── Refresh likes UI without full re-render ─────
   function refreshLikesUI() {
-    const btn = document.getElementById('pv-like-btn');
-    const countEl = document.getElementById('pv-likes-count');
+    const btn = modal.querySelector('#pv-like-btn');
+    const countEl = modal.querySelector('#pv-likes-count');
     if (btn) {
       btn.className = `pv-like-btn${isLiked ? ' liked' : ''}`;
       btn.title = isLiked ? 'Прибрати лайк' : 'Подобається';
@@ -300,8 +302,8 @@ export function showPhotoViewer(photo, onChanged) {
 
   // ─── Refresh comments UI without full re-render ──
   function refreshCommentsUI() {
-    const list = document.getElementById('pv-comments-list');
-    const countEl = document.getElementById('pv-comments-count');
+    const list = modal.querySelector('#pv-comments-list');
+    const countEl = modal.querySelector('#pv-comments-count');
     const headerCountEl = modal.querySelector('.pv-comments-count-label');
 
     if (countEl) countEl.textContent = comments.length;
@@ -309,7 +311,6 @@ export function showPhotoViewer(photo, onChanged) {
     if (list) {
       list.innerHTML = renderCommentsList();
       bindCommentDeleteButtons(list);
-      // Auto-scroll to bottom when new comment arrives
       list.scrollTop = list.scrollHeight;
     }
   }
@@ -321,10 +322,10 @@ export function showPhotoViewer(photo, onChanged) {
         e.stopPropagation();
         const commentId = btn.dataset.commentId;
         if (!commentId) return;
-        await deleteComment(photo.id, commentId);
         // Optimistic remove from local state
         comments = comments.filter(c => c.id !== commentId);
         refreshCommentsUI();
+        await deleteComment(photo.id, commentId);
       };
     });
   }
@@ -344,8 +345,8 @@ export function showPhotoViewer(photo, onChanged) {
     }
     refreshLikesUI();
 
-    // Animate
-    const btn = document.getElementById('pv-like-btn');
+    // Animate pop
+    const btn = modal.querySelector('#pv-like-btn');
     if (btn) {
       btn.classList.add('pv-like-anim');
       setTimeout(() => btn.classList.remove('pv-like-anim'), 350);
@@ -357,28 +358,51 @@ export function showPhotoViewer(photo, onChanged) {
 
   // ─── Handle send comment ──────────────────────────
   async function handleSendComment() {
-    const input = document.getElementById('pv-comment-input');
+    const input = modal.querySelector('#pv-comment-input');
     if (!input) return;
     const text = input.value.trim();
     if (!text) return;
 
-    const sendBtn = document.getElementById('pv-send-comment');
+    const sendBtn = modal.querySelector('#pv-send-comment');
     if (sendBtn) sendBtn.disabled = true;
     input.disabled = true;
 
-    const id = await addComment(photo.id, {
+    // Optimistic comment insert
+    const tempId = `temp_${Date.now()}`;
+    const optimisticComment = {
+      id: tempId,
+      photoId: photo.id,
       userId: currentUserId,
       userName: currentUserName,
-      text
-    });
-
+      text,
+      createdAt: new Date().toISOString()
+    };
+    comments = [...comments, optimisticComment];
+    refreshCommentsUI();
     input.value = '';
-    input.disabled = false;
-    if (sendBtn) sendBtn.disabled = false;
-    input.focus();
 
-    if (!id) {
-      showToast('Не вдалося надіслати коментар', 'error');
+    try {
+      const id = await addComment(photo.id, {
+        userId: currentUserId,
+        userName: currentUserName,
+        text
+      });
+
+      if (!id) {
+        // Rollback optimistic comment
+        comments = comments.filter(c => c.id !== tempId);
+        refreshCommentsUI();
+        showToast('Не вдалося надіслати коментар', 'error');
+      }
+    } catch (err) {
+      console.error('Send comment error:', err);
+      comments = comments.filter(c => c.id !== tempId);
+      refreshCommentsUI();
+      showToast('Помилка відправки коментаря', 'error');
+    } finally {
+      input.disabled = false;
+      if (sendBtn) sendBtn.disabled = false;
+      input.focus();
     }
   }
 
@@ -461,22 +485,22 @@ export function showPhotoViewer(photo, onChanged) {
     }
 
     // Like button
-    const likeBtn = document.getElementById('pv-like-btn');
+    const likeBtn = modal.querySelector('#pv-like-btn');
     if (likeBtn) likeBtn.onclick = handleLike;
 
     // Comment send button
-    const sendBtn = document.getElementById('pv-send-comment');
+    const sendBtn = modal.querySelector('#pv-send-comment');
     if (sendBtn) sendBtn.onclick = handleSendComment;
 
     // Comment input — Enter to send
-    const commentInput = document.getElementById('pv-comment-input');
+    const commentInput = modal.querySelector('#pv-comment-input');
     if (commentInput) {
-      commentInput.addEventListener('keydown', (e) => {
+      commentInput.onkeydown = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           handleSendComment();
         }
-      });
+      };
     }
 
     // Comment delete buttons
@@ -498,9 +522,8 @@ export function showPhotoViewer(photo, onChanged) {
   // ─── Launch ───────────────────────────────────────
   window.addEventListener('keydown', onKeyDown);
   render();
-  document.body.appendChild(modal);
 
-  // Start real-time subscriptions AFTER modal is in DOM
+  // Start real-time subscriptions
   likesUnsub = subscribeToLikes(photo.id, (newLikes) => {
     likes = newLikes;
     isLiked = newLikes.some(l => l.userId === currentUserId);
