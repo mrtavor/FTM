@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node -e \"import('fs').then(fs => fs.writeFileSync('./public/version.json', JSON.stringify({version: Date.now(), builtAt: new Date().toISOString()})));\" && vite build",
     "preview": "vite preview",
-    "deploy": "vite build && cd dist && git init && git checkout -B gh-pages && git add -A && git commit -m \"deploy\" && git push -f https://github.com/mrtavor/FTM.git gh-pages"
+    "deploy": "node -e \"import('fs').then(fs => fs.writeFileSync('./public/version.json', JSON.stringify({version: Date.now(), builtAt: new Date().toISOString()})));\" && vite build && cd dist && git init && git checkout -B gh-pages && git add -A && git commit -m \"deploy\" && git push -f https://github.com/mrtavor/FTM.git gh-pages"
   },
   "dependencies": {
     "exifr": "^7.1.3",

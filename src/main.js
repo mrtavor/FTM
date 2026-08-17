@@ -9,6 +9,7 @@ import { openUploadModal } from './components/uploadModal.js';
 import { openProfileModal, updateHeaderNickDisplay } from './components/profileModal.js';
 import { openFriendsModal, updateHeaderGroupBadge } from './components/friendsModal.js';
 import { openGalleryModal } from './components/galleryModal.js';
+import { initVersionChecker } from './utils/versionChecker.js';
 import { loadSampleLocations } from './utils/mockData.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -26,7 +27,10 @@ document.addEventListener('DOMContentLoaded', () => {
     renderMapMarkers();
   }
 
-  // 3. Bind UI Controls
+  // 3. Initialize Version Auto-Update Poller
+  initVersionChecker();
+
+  // 4. Bind UI Controls
   setupNavigationAndControls();
 });
 
