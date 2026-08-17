@@ -84,7 +84,7 @@ export function initMap(containerId = 'map') {
   mapInstance.on('moveend zoomend', handleMapViewportChange);
 
   // Setup real-time listener for current group and metadata
-  onGroupChange(({ activeGroupCode }) => {
+  function attachGroupSync(targetGroupCode) {
     if (groupUnsubscribe) {
       groupUnsubscribe();
       groupUnsubscribe = null;
@@ -94,10 +94,12 @@ export function initMap(containerId = 'map') {
       metaUnsubscribe = null;
     }
 
-    if (activeGroupCode) {
+    const currentCode = targetGroupCode || getActiveGroupCode();
+
+    if (currentCode) {
       // 1. Photos real-time sync (instant pin add/remove)
       groupUnsubscribe = subscribeToGroupUpdates(
-        activeGroupCode,
+        currentCode,
         (newPhoto, initialPhotos) => {
           if (newPhoto) {
             notifyNewGroupPhoto(newPhoto, (lat, lng) => {
@@ -120,7 +122,7 @@ export function initMap(containerId = 'map') {
       );
 
       // 2. Group metadata real-time sync (name change, ban, deletion)
-      metaUnsubscribe = subscribeToGroupMetadata(activeGroupCode, (meta) => {
+      metaUnsubscribe = subscribeToGroupMetadata(currentCode, (meta) => {
         const currentUserName = getCurrentDisplayName();
 
         if (!meta.exists || meta.isDeleted || meta.status === 'deleted') {
@@ -149,12 +151,20 @@ export function initMap(containerId = 'map') {
         }
 
         if (meta.name) {
-          setActiveGroup(activeGroupCode, meta.name);
+          setActiveGroup(currentCode, meta.name);
           updateHeaderGroupBadge();
         }
       });
     }
     renderMapMarkers();
+  }
+
+  // Subscribe on map startup
+  attachGroupSync(getActiveGroupCode());
+
+  // Subscribe on any group change event
+  onGroupChange(({ groupCode }) => {
+    attachGroupSync(groupCode);
   });
 
   handleMapViewportChange();

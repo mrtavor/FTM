@@ -119,8 +119,6 @@ export async function savePhotoDocument(photoData) {
 
 /**
  * Fetch photos from Firestore for visible geohashes
- * @param {string[]} geohashes 
- * @returns {Promise<Array<Object>>}
  */
 export async function fetchPhotosForGeohashes(geohashes) {
   if (!db || geohashes.length === 0) {
@@ -130,8 +128,6 @@ export async function fetchPhotosForGeohashes(geohashes) {
   const results = [];
   const photosCol = collection(db, 'photos');
 
-  // Firestore range query for each geohash prefix
-  // Using Promise.all with small batch (max 10 queries per viewport update)
   const queries = geohashes.slice(0, 10).map(async (hash) => {
     try {
       const q = query(
@@ -152,6 +148,32 @@ export async function fetchPhotosForGeohashes(geohashes) {
 
   await Promise.all(queries);
   return results;
+}
+
+/**
+ * Fetch all photos belonging to a specific group code
+ */
+export async function fetchGroupPhotos(groupCode) {
+  if (!db || !groupCode) return [];
+  const cleanTag = sanitizeGroupTag(groupCode);
+  if (!cleanTag) return [];
+
+  try {
+    const q = query(
+      collection(db, 'photos'),
+      where('groupCode', '==', cleanTag),
+      limit(200)
+    );
+    const snapshot = await getDocs(q);
+    const photos = [];
+    snapshot.forEach((docSnap) => {
+      photos.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    return photos;
+  } catch (err) {
+    console.warn('Error fetching group photos:', err);
+    return [];
+  }
 }
 
 import { onSnapshot, getDoc } from 'firebase/firestore';

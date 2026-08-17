@@ -50,8 +50,8 @@ export function openUploadModal() {
           <!-- GPS Status & Location Picker -->
           <div id="gps-status-box" style="display: none;"></div>
 
-          <!-- Group / Friends Selector (shown if user has active group) -->
-          ${isGoogle && currentGroup ? `
+          <!-- Group / Friends Selector (shown if user is in an active group) -->
+          ${currentGroup ? `
             <div id="group-selector-box" style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm);">
               <label class="form-label" style="font-size: 12px; margin-bottom: 4px;">Хто побачить це фото:</label>
               <select id="select-photo-group" class="form-input-text" style="padding: 8px 12px; font-size: 13px;">
@@ -304,7 +304,13 @@ async function handleUploadSubmit() {
   const descInput = document.getElementById('photo-desc-input');
   const description = descInput ? descInput.value.trim() : '';
   const selectGroup = document.getElementById('select-photo-group');
-  const finalGroupCode = selectGroup ? selectGroup.value.trim().toUpperCase() : '';
+  const activeCode = getActiveGroupCode();
+  let finalGroupCode = null;
+  if (selectGroup) {
+    finalGroupCode = selectGroup.value.trim() ? sanitizeGroupTag(selectGroup.value) : null;
+  } else if (activeCode) {
+    finalGroupCode = activeCode;
+  }
 
   const btnSubmit = document.getElementById('btn-submit-upload');
   const progressBox = document.getElementById('upload-progress-box');
@@ -339,7 +345,7 @@ async function handleUploadSubmit() {
       mainUrl: storageUrls.mainUrl,
       thumbUrl: storageUrls.thumbUrl,
       authorName: getCurrentDisplayName(),
-      groupCode: finalGroupCode || null,
+      groupCode: finalGroupCode,
       userId: userId
     };
 
