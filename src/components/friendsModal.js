@@ -1,10 +1,6 @@
 /**
  * Friends Circle, Group Management & Administration Modal
- * Administrator powers:
- * - Group Creator is automatically the Group Admin (👑)
- * - Admin can edit Group Name & Key/Tag
- * - Admin can kick/ban members (🚫)
- * - ONLY Admin can delete the entire group (🗑️)
+ * Always accessible Settings button (⚙️ Налаштування)
  */
 import {
   getActiveGroupCode,
@@ -100,9 +96,9 @@ export async function openFriendsModal() {
             ${activeGroup ? `
               <!-- Active Group Header -->
               <div style="background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-md);">
-                <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
                   <div>
-                    <div style="display: flex; align-items: center; gap: 6px;">
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                       <span style="font-size: 18px; font-weight: 800; color: var(--accent-primary); line-height: 1.2;">
                         ${groupName}
                       </span>
@@ -117,43 +113,45 @@ export async function openFriendsModal() {
                     </div>
                   </div>
 
-                  <div style="display: flex; gap: 6px;">
-                    ${isAdmin ? `
-                      <button id="btn-toggle-group-settings" class="btn-icon" style="width: 32px; height: 32px; font-size: 14px;" title="Змінити назву чи ключ групи">
-                        ⚙️
-                      </button>
-                    ` : ''}
-                    <button id="btn-leave-group" class="btn-secondary" style="padding: 4px 8px; font-size: 11px;">
-                      Покинути
+                  <!-- Controls: Settings & Leave buttons -->
+                  <div style="display: flex; gap: 6px; align-items: center;">
+                    <button id="btn-toggle-group-settings" class="btn-secondary" style="font-size: 12px; padding: 6px 10px; display: flex; align-items: center; gap: 4px;" title="Змінити назву чи ключ групи">
+                      <span>⚙️</span>
+                      <span>Налаштування</span>
+                    </button>
+                    <button id="btn-leave-group" class="btn-danger" style="padding: 6px 10px; font-size: 12px;">
+                      Вийти
                     </button>
                   </div>
                 </div>
 
-                <!-- Group Edit Settings Block (Admin Only) -->
-                ${isAdmin ? `
-                  <div id="group-edit-block" style="display: ${isEditingSettings ? 'block' : 'none'}; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
-                    <div style="font-size: 12px; font-weight: 700; margin-bottom: 8px;">👑 Налаштування адміністратора:</div>
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                      <div>
-                        <label class="form-label" style="font-size: 11px;">Назва групи:</label>
-                        <input type="text" id="edit-group-name" class="form-input-text" value="${groupName}" maxlength="50" placeholder="Подорож у гори 🌲" />
-                      </div>
-                      <div>
-                        <label class="form-label" style="font-size: 11px;">Ключ / Тег групи:</label>
-                        <input type="text" id="edit-group-tag" class="form-input-text" value="${activeGroup}" maxlength="30" placeholder="KARPATY2026" />
-                      </div>
-                      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <!-- Group Edit Settings Block (Toggled by ⚙️ Налаштування) -->
+                <div id="group-edit-block" style="display: ${isEditingSettings ? 'block' : 'none'}; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-color);">
+                  <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--text-main);">
+                    ⚙️ Налаштування групи:
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div>
+                      <label class="form-label" style="font-size: 11px;">Назва групи:</label>
+                      <input type="text" id="edit-group-name" class="form-input-text" value="${groupName}" maxlength="50" placeholder="Подорож у гори 🌲" />
+                    </div>
+                    <div>
+                      <label class="form-label" style="font-size: 11px;">Ключ / Тег групи:</label>
+                      <input type="text" id="edit-group-tag" class="form-input-text" value="${activeGroup}" maxlength="30" placeholder="KARPATY2026" />
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                      ${isAdmin ? `
                         <button id="btn-delete-entire-group" class="btn-danger" style="font-size: 11px; padding: 6px 10px;">
                           🗑️ Видалити групу
                         </button>
-                        <div style="display: flex; gap: 6px;">
-                          <button id="btn-cancel-group-edit" class="btn-secondary" style="font-size: 11px; padding: 6px 10px;">Скасувати</button>
-                          <button id="btn-save-group-edit" class="btn-primary" style="font-size: 11px; padding: 6px 12px;">Зберегти</button>
-                        </div>
+                      ` : `<div></div>`}
+                      <div style="display: flex; gap: 6px;">
+                        <button id="btn-cancel-group-edit" class="btn-secondary" style="font-size: 11px; padding: 6px 10px;">Скасувати</button>
+                        <button id="btn-save-group-edit" class="btn-primary" style="font-size: 11px; padding: 6px 14px;">Зберегти зміни</button>
                       </div>
                     </div>
                   </div>
-                ` : ''}
+                </div>
 
                 <!-- Share Link -->
                 <div style="margin-top: 12px;">
@@ -287,10 +285,10 @@ export async function openFriendsModal() {
     </div>
   `;
 
-  attachFriendsEvents(isAdmin);
+  attachFriendsEvents(isAdmin, groupOwnerId);
 }
 
-function attachFriendsEvents(isAdmin) {
+function attachFriendsEvents(isAdmin, groupOwnerId) {
   const backdrop = document.getElementById('friends-modal-backdrop');
   const btnClose = document.getElementById('btn-close-friends');
   const btnCloseFooter = document.getElementById('btn-close-friends-footer');
@@ -339,7 +337,7 @@ function attachFriendsEvents(isAdmin) {
     };
   }
 
-  // Create Group (Creator becomes Owner/Admin)
+  // Create Group
   if (btnSubmitCreate && inputCreateTag) {
     btnSubmitCreate.onclick = async () => {
       const tagVal = inputCreateTag.value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
@@ -390,7 +388,7 @@ function attachFriendsEvents(isAdmin) {
     };
   }
 
-  // Toggle group settings edit (Admin Only)
+  // Toggle group settings edit
   if (btnToggleEdit && editBlock) {
     btnToggleEdit.onclick = () => {
       isEditingSettings = !isEditingSettings;
@@ -405,7 +403,7 @@ function attachFriendsEvents(isAdmin) {
     };
   }
 
-  // Save edited group name / tag (Admin Only)
+  // Save edited group name / tag
   if (btnSaveEdit) {
     btnSaveEdit.onclick = async () => {
       const editNameInput = document.getElementById('edit-group-name');
@@ -432,7 +430,6 @@ function attachFriendsEvents(isAdmin) {
           ownerId: groupOwnerId || uid
         });
 
-        // If tag changed, delete old group doc
         if (oldTag && oldTag !== newTag) {
           try { await deleteGroup(oldTag); } catch(e) {}
         }
@@ -447,7 +444,7 @@ function attachFriendsEvents(isAdmin) {
         console.error('Error saving group settings:', err);
         showToast('Помилка збереження: ' + (err.message || 'Спробуйте ще раз'), 'error');
         btnSaveEdit.disabled = false;
-        btnSaveEdit.textContent = 'Зберегти';
+        btnSaveEdit.textContent = 'Зберегти зміни';
       }
     };
   }
