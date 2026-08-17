@@ -127,6 +127,18 @@ export function subscribeGroupChanges(callback) {
   }
 }
 
+export const onGroupChange = subscribeGroupChanges;
+
+export function notifyNewGroupPhoto(photo) {
+  if (!photo || !photo.groupCode) return;
+  const isGlobal = isGroupNotificationEnabled(photo.groupCode);
+  const isMember = isMemberNotificationEnabled(photo.groupCode, photo.authorName);
+
+  if (isGlobal && isMember) {
+    showToast(`📸 ${photo.authorName || 'Друг'} додав нове фото в групу!`, 'info', 4000);
+  }
+}
+
 function notifyGroupListeners() {
   groupListeners.forEach((cb) => {
     try {
