@@ -1,0 +1,367 @@
+/**
+ * FTM Photo Map - Modal & Interactive Component Styles
+ */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(43, 45, 66, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: var(--z-modal);
+  padding: 0;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@media (min-width: 640px) {
+  .modal-backdrop {
+    align-items: center;
+    padding: 20px;
+  }
+}
+
+.modal-window {
+  background-color: var(--bg-surface);
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid var(--border-color);
+}
+
+@media (min-width: 640px) {
+  .modal-window {
+    border-radius: var(--radius-lg);
+    animation: zoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.modal-close-btn:hover {
+  background: var(--bg-active);
+  color: var(--text-main);
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* ==========================================================================
+   UPLOAD DROPZONE & PHOTO PREVIEW
+   ========================================================================== */
+.upload-dropzone {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background-color: var(--bg-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.upload-dropzone:hover, .upload-dropzone.dragover {
+  border-color: var(--accent-terracotta);
+  background-color: #FDF4F1;
+}
+
+.dropzone-icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.dropzone-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.dropzone-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.file-input-hidden {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Preview Card */
+.preview-card {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: #000;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-height: 240px;
+}
+
+.preview-img {
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  display: block;
+}
+
+.preview-badge-group {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge-info {
+  background: rgba(43, 45, 66, 0.85);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  backdrop-filter: blur(4px);
+}
+
+.btn-remove-photo {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 14px;
+}
+
+.btn-remove-photo:hover {
+  background: var(--accent-coral);
+}
+
+/* GPS Status Banner */
+.gps-status-card {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+
+.gps-status-card.gps-found {
+  background-color: #EDF7ED;
+  color: #1E4620;
+  border-color: #C8E6C9;
+}
+
+.gps-status-card.gps-missing {
+  background-color: #FFF4E5;
+  color: #663C00;
+  border-color: #FFE0B2;
+}
+
+.gps-status-card.gps-manual {
+  background-color: #E8F0FE;
+  color: #1A73E8;
+  border-color: #D2E3FC;
+}
+
+/* Emoji Selector */
+.form-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.emoji-option-btn {
+  height: 38px;
+  font-size: 20px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.emoji-option-btn:hover {
+  background-color: var(--bg-subtle);
+  transform: scale(1.08);
+}
+
+.emoji-option-btn.selected {
+  background-color: #FDF4F1;
+  border-color: var(--accent-terracotta);
+  box-shadow: 0 0 0 2px rgba(224, 122, 95, 0.25);
+}
+
+/* Inputs */
+.form-input-text {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 14px;
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  transition: border-color 0.2s;
+  resize: vertical;
+}
+
+.form-input-text:focus {
+  border-color: var(--accent-primary);
+  background-color: #FFFFFF;
+  outline: none;
+}
+
+/* Upload Progress Bar */
+.progress-bar-container {
+  width: 100%;
+  height: 8px;
+  background-color: var(--bg-subtle);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background-color: var(--accent-terracotta);
+  width: 0%;
+  transition: width 0.2s ease;
+}
+
+/* ==========================================================================
+   PHOTO DETAIL MODAL
+   ========================================================================== */
+.photo-detail-image-box {
+  width: 100%;
+  background: #111;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-height: 420px;
+}
+
+.photo-detail-full-img {
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
+
+.photo-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.photo-detail-emoji-desc {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.photo-detail-emoji {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.photo-detail-desc {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.photo-detail-info-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes zoomIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}

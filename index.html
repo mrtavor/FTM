@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>FTM Photo Map — Інтерактивна Гео-Фотокарта</title>
+    <meta name="description" content="Інтерактивна карта для додавання фотографій за GPS-координатами зі 100% клієнтською обробкою та оптимізацією для Firebase." />
+    <meta name="theme-color" content="#3D405B" />
+
+    <!-- Google Fonts: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Leaflet & MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+    <!-- Application Stylesheets -->
+    <link rel="stylesheet" href="./src/styles/main.css" />
+    <link rel="stylesheet" href="./src/styles/map.css" />
+    <link rel="stylesheet" href="./src/styles/modal.css" />
+  </head>
+  <body>
+    <div id="app" class="app-container">
+      <!-- Header Bar -->
+      <header class="app-header">
+        <div class="logo-group">
+          <div class="logo-icon">📍</div>
+          <div class="logo-text">
+            <span class="logo-title">GeoSnap Map</span>
+            <span class="logo-subtitle">100% Client-Side • Spark Optimized</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button id="btn-demo-data" class="btn-icon-pill" title="Завантажити тестові точки" aria-label="Демо дані">
+            <span class="icon">✨</span>
+            <span class="btn-text">Демо</span>
+          </button>
+          <button id="btn-settings" class="btn-icon" title="Налаштування Firebase" aria-label="Налаштування">
+            ⚙️
+          </button>
+        </div>
+      </header>
+
+      <!-- Map Container -->
+      <main class="map-wrapper">
+        <div id="map" class="map-view"></div>
+        
+        <!-- Crosshair Picker Overlay (Activated during manual pin mode) -->
+        <div id="crosshair-picker" class="crosshair-picker hidden">
+          <div class="crosshair-icon">📍</div>
+          <div class="crosshair-tooltip">Перетягніть карту, щоб встановити точку</div>
+          <button id="btn-confirm-location" class="btn-primary btn-picker-confirm">
+            ✓ Підтвердити координати
+          </button>
+        </div>
+
+        <!-- Floating Quick Controls -->
+        <div class="floating-controls">
+          <button id="btn-locate-me" class="btn-fab" title="Моя геолокація" aria-label="Моє місцезнаходження">
+            🧭
+          </button>
+          <button id="btn-zoom-in" class="btn-fab" title="Наблизити" aria-label="Наблизити">
+            ➕
+          </button>
+          <button id="btn-zoom-out" class="btn-fab" title="Віддалити" aria-label="Віддалити">
+            ➖
+          </button>
+        </div>
+      </main>
+
+      <!-- Bottom Navigation Bar -->
+      <nav class="bottom-nav">
+        <button id="nav-btn-explore" class="nav-item active" aria-label="Огляд карти">
+          <span class="nav-icon">🗺️</span>
+          <span class="nav-label">Карта</span>
+        </button>
+
+        <!-- Central Elevated Upload Button -->
+        <div class="upload-btn-container">
+          <button id="btn-open-upload" class="btn-upload-fab" aria-label="Додати нове фото">
+            <span class="plus-sign">+</span>
+          </button>
+        </div>
+
+        <button id="nav-btn-info" class="nav-item" aria-label="Про проект">
+          <span class="nav-icon">ℹ️</span>
+          <span class="nav-label">Інфо</span>
+        </button>
+      </nav>
+
+      <!-- Toast Notification Container -->
+      <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+      <!-- Modals are mounted here dynamically -->
+      <div id="modal-container"></div>
+    </div>
+
+    <!-- Application Entry Point -->
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

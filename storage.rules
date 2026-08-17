@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Фотографії зберігаються за структурою: photos/{userId}/{filename}
+    match /photos/{userId}/{fileName} {
+      // Публічне читання фото для перегляду на карті
+      allow read: if true;
+      
+      // Запис дозволений лише власнику папки (userId == auth.uid)
+      // Обмеження: макс. розмір файлу 1 МБ, лише допустимі типи зображень
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size <= 1 * 1024 * 1024
+        && request.resource.contentType.matches('image/(webp|jpeg|png)');
+        
+      // Видалення лише власником
+      allow delete: if request.auth != null
+        && request.auth.uid == userId;
+    }
+    
+    // Заборона доступу до решти директорій
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
