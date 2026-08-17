@@ -58,6 +58,18 @@ export function getFilterMode() {
   return filterMode;
 }
 
+export function setFilterMode(mode) {
+  filterMode = mode;
+  localStorage.setItem(GROUP_FILTER_KEY, mode);
+  notifyGroupListeners();
+}
+
+export function getGroupShareUrl(groupCode) {
+  const cleanCode = sanitizeGroupTag(groupCode);
+  const base = window.location.origin + window.location.pathname;
+  return `${base}?group=${encodeURIComponent(cleanCode)}`;
+}
+
 export function setActiveGroup(groupCode, groupName = '') {
   const cleanCode = sanitizeGroupTag(groupCode);
   const cleanName = groupName?.trim() || cleanCode;
