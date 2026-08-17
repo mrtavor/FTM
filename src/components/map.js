@@ -108,19 +108,11 @@ export function initMap(containerId = 'map') {
       // 1. Photos real-time sync (instant pin add/remove)
       groupUnsubscribe = subscribeToGroupUpdates(
         currentCode,
-        (newPhoto, initialPhotos) => {
+        (newPhoto) => {
           if (newPhoto) {
             notifyNewGroupPhoto(newPhoto, (lat, lng) => {
               flyToCoords(lat, lng, 15);
             });
-          } else if (Array.isArray(initialPhotos) && initialPhotos.length > 0) {
-            // Auto focus on group photos if map is at default view
-            if (mapInstance.getZoom() <= 7) {
-              const bounds = L.latLngBounds(initialPhotos.map(p => [p.lat, p.lng]));
-              if (bounds.isValid()) {
-                mapInstance.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-              }
-            }
           }
           renderMapMarkers();
         },

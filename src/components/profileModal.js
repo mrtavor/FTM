@@ -1,5 +1,6 @@
 /**
  * Profile & Country Map Positioning Modal
+ * With interactive Country Flag Emoji Picker
  */
 import {
   getCurrentUser,
@@ -21,7 +22,7 @@ export function openProfileModal() {
   const isGoogle = isGoogleUser();
   const currentNick = getCurrentDisplayName();
   const user = getCurrentUser();
-  const currentCountry = getUserCountry();
+  let currentCountry = getUserCountry();
 
   container.innerHTML = `
     <div class="modal-backdrop" id="profile-modal-backdrop">
@@ -46,19 +47,24 @@ export function openProfileModal() {
             </div>
           </div>
 
-          <!-- Country / Region Map Centering -->
+          <!-- Country / Region Flag Emoji Grid Selector -->
           <div style="background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-md);">
-            <label class="form-label" style="margin-bottom: 4px;">🌍 Регіон / Країна карти за замовчуванням:</label>
-            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
-              Карта автоматично відкриватиметься та фокусуватиметься на обраній країні.
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+              <label class="form-label" style="margin-bottom: 0;">Країна / Регіон карти:</label>
+              <span id="selected-country-label" style="font-size: 13px; font-weight: 700; color: var(--accent-primary);">
+                ${currentCountry.flag} ${currentCountry.name}
+              </span>
             </div>
-            <select id="select-user-country" class="form-input-text" style="padding: 10px 12px; font-size: 13px; font-weight: 600;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+              Натисніть на прапорець, щоб перемістити карту на вашу країну:
+            </div>
+            <div class="country-flag-grid" id="country-flag-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;">
               ${COUNTRIES.map((c) => `
-                <option value="${c.code}" ${c.code === currentCountry.code ? 'selected' : ''}>
-                  ${c.flag} ${c.name}
-                </option>
+                <button type="button" class="btn-country-flag ${c.code === currentCountry.code ? 'selected' : ''}" data-code="${c.code}" style="height: 42px; font-size: 22px; display: flex; align-items: center; justify-content: center; background: ${c.code === currentCountry.code ? '#E07A5F' : 'var(--bg-surface)'}; border: 1px solid ${c.code === currentCountry.code ? '#E07A5F' : 'var(--border-color)'}; border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s ease; box-shadow: var(--shadow-sm);" title="${c.name}">
+                  ${c.flag}
+                </button>
               `).join('')}
-            </select>
+            </div>
           </div>
 
           <!-- Google Account Card -->
@@ -107,7 +113,8 @@ function attachProfileEvents() {
   const btnCloseFooter = document.getElementById('btn-close-profile-footer');
   const btnSaveNick = document.getElementById('btn-save-nickname');
   const inputNick = document.getElementById('input-nickname');
-  const selectCountry = document.getElementById('select-user-country');
+  const flagGrid = document.getElementById('country-flag-grid');
+  const labelCountry = document.getElementById('selected-country-label');
   const btnGoogle = document.getElementById('btn-google-login');
   const btnLogout = document.getElementById('btn-logout');
 
@@ -121,14 +128,28 @@ function attachProfileEvents() {
     if (e.target === backdrop) close();
   };
 
-  // Country Selection Change
-  if (selectCountry) {
-    selectCountry.onchange = () => {
-      const code = selectCountry.value;
-      const country = setUserCountry(code);
-      showToast(`Карту налаштовано на: ${country.flag} ${country.name}`, 'success');
-      flyToCoords(country.lat, country.lng, country.zoom);
-    };
+  // Country Flag Emoji Buttons
+  if (flagGrid) {
+    flagGrid.querySelectorAll('.btn-country-flag').forEach((btn) => {
+      btn.onclick = () => {
+        const code = btn.dataset.code;
+        const country = setUserCountry(code);
+
+        flagGrid.querySelectorAll('.btn-country-flag').forEach((b) => {
+          b.style.background = 'var(--bg-surface)';
+          b.style.borderColor = 'var(--border-color)';
+        });
+        btn.style.background = '#E07A5F';
+        btn.style.borderColor = '#E07A5F';
+
+        if (labelCountry) {
+          labelCountry.textContent = `${country.flag} ${country.name}`;
+        }
+
+        showToast(`Карту переміщено: ${country.flag} ${country.name}`, 'success');
+        flyToCoords(country.lat, country.lng, country.zoom);
+      };
+    });
   }
 
   if (btnSaveNick && inputNick) {
